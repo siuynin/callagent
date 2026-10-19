@@ -16,12 +16,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from voiceos.agents.config import config_hash
 from voiceos.api.deps import DbSession
 from voiceos.api.errors import ApiError, trace_id_var
 from voiceos.config import get_settings
 from voiceos.db import utcnow
 from voiceos.domain.phone import normalize_vn_phone
-from voiceos.models import Call, CallTurn, Contact, Task, Tenant, ToolRun
+from voiceos.models import Agent, AgentVersion, Call, CallTurn, Contact, Task, Tenant, ToolRun
 from voiceos.services import enqueue, record_audit
 
 router = APIRouter(prefix="/internal", tags=["internal"], include_in_schema=False)
@@ -68,6 +69,72 @@ def _aware(dt: datetime) -> datetime:
     return dt if dt.tzinfo else dt.replace(tzinfo=utcnow().tzinfo)
 
 
+def _own_version(db, svc: ServiceContext, version_id: uuid.UUID | None) -> uuid.UUID | None:
+    if version_id is None:
+        return None
+    ok = db.scalar(
+        select(AgentVersion.id).where(AgentVersion.id == version_id, AgentVersion.tenant_id == svc.tenant_id)
+    )
+    if ok is None:
+        raise ApiError(422, "INVALID_REFERENCE", "Phiên bản agent không thuộc workspace này")
+    return version_id
+
+
+# --- agents ---
+
+
+@router.get("/agents/active")
+def active_agent(
+    svc: Service, db: DbSession, agent_id: uuid.UUID | None = None, purpose: str = "receptionist"
+):
+    """Config live calls must use: the published active version only, never a draft (AC04)."""
+    stmt = select(Agent).where(Agent.tenant_id == svc.tenant_id, Agent.active_version_id.is_not(None))
+    stmt = stmt.where(Agent.id == agent_id) if agent_id else stmt.where(Agent.purpose == purpose)
+    agent = db.scalar(stmt.order_by(Agent.created_at))
+    version = db.get(AgentVersion, agent.active_version_id) if agent else None
+    if version is None or version.status != "published" or version.tenant_id != svc.tenant_id:
+        raise ApiError(404, "NO_ACTIVE_AGENT", "Chưa có agent nào được xuất bản")
+    return {
+        "agent_id": str(agent.id),
+        "agent_name": agent.name,
+        "version_id": str(version.id),
+        "number": version.number,
+        "config": version.config,
+        "trace_id": trace_id_var.get(),
+    }
+
+
+class EvalResultIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    config_hash: str
+    passed: bool
+    summary: dict
+    error: str | None = None
+
+
+@router.post("/agent-versions/{version_id}/eval-result")
+def eval_result(version_id: uuid.UUID, body: EvalResultIn, svc: Service, db: DbSession):
+    version = db.scalar(
+        select(AgentVersion).where(AgentVersion.id == version_id, AgentVersion.tenant_id == svc.tenant_id)
+    )
+    if version is None:
+        raise ApiError(404, "NOT_FOUND", "Không tìm thấy phiên bản agent")
+    # a result for an older config (draft edited meanwhile) or an already published version is ignored
+    if version.status != "draft" or body.config_hash != config_hash(version.config):
+        return {"accepted": False, "reason": "stale", "trace_id": trace_id_var.get()}
+    version.test_result = {
+        **(version.test_result or {}),
+        "status": "finished",
+        "passed": body.passed,
+        "config_hash": body.config_hash,
+        "summary": body.summary,
+        "error": body.error,
+        "finished_at": utcnow().isoformat(),
+    }
+    db.commit()
+    return {"accepted": True, "trace_id": trace_id_var.get()}
+
+
 # --- calls ---
 
 
@@ -79,6 +146,7 @@ class CallIn(BaseModel):
     started_at: datetime
     caller_number: str | None = Field(default=None, max_length=32)
     after_hours: bool = False
+    agent_version_id: uuid.UUID | None = None
 
 
 @router.post("/calls")
@@ -116,6 +184,7 @@ def create_call(body: CallIn, svc: Service, db: DbSession):
         technical_status="in_progress",
         contact_id=contact_id,
         after_hours=body.after_hours,
+        agent_version_id=_own_version(db, svc, body.agent_version_id),
     )
     db.add(call)
     try:

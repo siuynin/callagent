@@ -10,6 +10,9 @@ dependencies = [
   "alembic>=1.16",
   "pydantic-settings>=2.10",
   "psycopg[binary]>=3.2",
+  "pyjwt[crypto]>=2.10",
+  "email-validator>=2.2",
+  "httpx>=0.28",
 ]
 
 [project.optional-dependencies]

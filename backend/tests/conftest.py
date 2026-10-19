@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from voiceos import db as dbmod  # noqa: E402
 from voiceos.config import get_settings  # noqa: E402
 from voiceos.db import Base  # noqa: E402
-from voiceos.seed import TENANT_A, TENANT_B, USER_ADMIN_A, USER_ADMIN_B, USER_STAFF_A, seed  # noqa: E402
+from voiceos.seed import TENANT_A, TENANT_B, USER_ADMIN_A, USER_ADMIN_B, USER_STAFF_A, seed, seed_agents  # noqa: E402
 
 TEST_DB = os.environ.get("TEST_DATABASE_URL", "sqlite+pysqlite:///./test-voiceos.db")
 IS_POSTGRES = TEST_DB.startswith("postgresql")
@@ -37,6 +37,7 @@ def session_factory():
     Base.metadata.create_all(engine)
     with factory() as s:
         seed(s)
+        seed_agents(s)
     yield factory
     Base.metadata.drop_all(engine)
     engine.dispose()

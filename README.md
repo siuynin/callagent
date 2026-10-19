@@ -1,6 +1,6 @@
 # VoiceOS
 
-Nền tảng tổng đài AI tiếng Việt. Đặc tả nguồn: [`../plan`](../plan/README.md) (v1.1). Quyết định kiến trúc: [`docs/adr`](docs/adr) (Gemini Live: ADR 0003, OpenAI Realtime: ADR 0005, gateway ghi vào backend: ADR 0006).
+Nền tảng tổng đài AI tiếng Việt. Đặc tả nguồn: [`../plan`](../plan/README.md) (v1.1). Quyết định kiến trúc: [`docs/adr`](docs/adr) (Gemini Live: ADR 0003, OpenAI Realtime: ADR 0005, gateway ghi vào backend: ADR 0006, phiên bản agent và cổng eval: ADR 0007, đăng nhập OIDC: ADR 0008).
 
 ## Trạng thái (19/10/2026)
 
@@ -9,7 +9,8 @@ Nền tảng tổng đài AI tiếng Việt. Đặc tả nguồn: [`../plan`](..
 | M0 nền tảng | Đang làm. Đã có repo, ADR 0001–0004, models + migration đầu, tenant scoping, RBAC, idempotency, If-Match, outbox worker, CI |
 | M0.5 voice spike | Code xong, **chưa đo với model thật**. Gateway, adapter Gemini Live và OpenAI Realtime (so sánh A/B), mock, trang gọi thử, mô phỏng đường điện thoại 8 kHz, bộ đo, eval runner |
 | Web | Khung Next.js: Tổng quan, Khách hàng (đọc API thật), trang voice spike |
-| Xác thực | Chỉ có token dev (`APP_ENV=dev`). OIDC ở M1 |
+| Voice Agents | Bản nháp, eval với model thật, xuất bản khi đạt, rollback; mỗi cuộc gọi ghi phiên bản agent (ADR 0007) |
+| Xác thực | OIDC (code + PKCE) qua web BFF, mời/đổi vai trò/gỡ thành viên ở màn Cài đặt (ADR 0008). Không cấu hình OIDC thì dùng token dev (`APP_ENV=dev`) |
 | Postgres | CI chạy Postgres 17 + pgvector; máy dev đang dùng SQLite (ADR 0002) |
 
 Mặc định an toàn: `CALL_PROVIDER=mock`, `CONNECTOR_MODE=mock`, `NOTIFY_PROVIDER=mock`, `OUTBOUND_ENABLED=false`, `AI_PROVIDER=mock`.
@@ -91,6 +92,13 @@ Nếu `.env` của bạn tạo từ bản trước còn các dòng `PRICE_*` kh�
 
 Báo cáo và file ghi âm chứa transcript/giọng nói nên không được commit (đã gitignore).
 
+## Đăng nhập OIDC trên máy dev
+
+1. `cd web && node scripts/mock-oidc.mjs` (cổng 9400, đăng nhập luôn bằng `MOCK_EMAIL`, mặc định `admin-a@example.invalid` của seed).
+2. Backend `.env`: `OIDC_ISSUER=http://localhost:9400`, `OIDC_AUDIENCE=voiceos-web`.
+3. `web/.env.local`: `OIDC_ISSUER=http://localhost:9400`, `OIDC_CLIENT_ID=voiceos-web`, `SESSION_SECRET=<32+ ký tự>`, `APP_ORIGIN=<địa chỉ web>`. Khởi động lại backend và web.
+4. Người chưa được mời sẽ tới trang `/chua-duoc-moi`. Mời thêm người ở Cài đặt → Đội ngũ, rồi chạy lại mock với `MOCK_EMAIL=<email đó>`.
+
 ## Kiểm thử
 
 ```bash
@@ -103,6 +111,6 @@ CI chạy backend trên Postgres, gateway với mock provider (không bao giờ 
 
 ## Chưa làm (theo plan/docs/07)
 
-- OIDC, phân quyền theo chi nhánh, RLS Postgres.
+- Phân quyền theo chi nhánh, RLS Postgres, refresh token, nhiều issuer OIDC theo tenant.
 - Telephony thật (ADR 0004 chờ SIP trunk test và kết quả spike).
 - Inbox, handoff, lịch hẹn thật, thông báo nhân viên — M1.

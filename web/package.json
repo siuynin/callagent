@@ -20,6 +20,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
+    "oauth2-mock-server": "9.2.0",
     "typescript": "^5"
   }
 }

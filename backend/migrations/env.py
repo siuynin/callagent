@@ -17,6 +17,15 @@ if not config.get_main_option("sqlalchemy.url"):
 target_metadata = Base.metadata
 
 
+def render_item(type_, obj, autogen_context):
+    """Render app TypeDecorators as their plain SQLAlchemy type so migrations never import app code."""
+    from voiceos.models.base import UTCDateTime
+
+    if type_ == "type" and isinstance(obj, UTCDateTime):
+        return "sa.DateTime(timezone=True)"
+    return False
+
+
 def run_migrations_offline() -> None:
     context.configure(
         url=config.get_main_option("sqlalchemy.url"),
@@ -24,6 +33,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         render_as_batch=True,
+        render_item=render_item,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -35,7 +45,12 @@ def run_migrations_online() -> None:
     )
     with connectable.connect() as connection:
         # batch mode lets the same migrations run on SQLite (dev) and PostgreSQL (CI/prod)
-        context.configure(connection=connection, target_metadata=target_metadata, render_as_batch=True)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            render_as_batch=True,
+            render_item=render_item,
+        )
         with context.begin_transaction():
             context.run_migrations()
 

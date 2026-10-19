@@ -13,6 +13,9 @@ class Agent(TenantScoped, Versioned, Base):
 
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     purpose: Mapped[str] = mapped_column(String(64), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    # version live calls use; no FK to avoid an agents <-> agent_versions cycle (checked in code)
+    active_version_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
 
 
 class AgentVersion(TenantScoped, Base):

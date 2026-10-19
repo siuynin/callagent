@@ -2,7 +2,9 @@ import { connection } from "next/server";
 
 import { Header, HeaderPlaceholder } from "@/components/shell/Header";
 import { Sidebar, SidebarView, type Viewer } from "@/components/shell/Sidebar";
-import { api, type Health, type Me, ROLE_LABEL } from "@/lib/api";
+import { api, type Health, type Me } from "@/lib/api";
+import { ROLE_LABEL } from "@/lib/labels";
+import { oidcEnabled } from "@/lib/session";
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -23,6 +25,7 @@ export async function Chrome() {
         roleLabel: ROLE_LABEL[me.role],
         workspace: me.tenant.name,
         initials: initials(me.display_name || "?"),
+        canSignOut: oidcEnabled(),
       }
     : null;
   const envLabel = health && health.env !== "production" ? "BẢN THỬ NGHIỆM" : null;

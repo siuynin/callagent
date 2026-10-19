@@ -10,13 +10,13 @@ import logging
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
+from gateway.agent import AgentRuntime, build_spec, file_agent
 from gateway.audio import phone_channel_sim
 from gateway.backend import BackendSink
-from gateway.config import ROOT, Settings
+from gateway.config import Settings
 from gateway.metrics import CallRecorder
 from gateway.providers.base import (
     AudioOut,
@@ -26,7 +26,6 @@ from gateway.providers.base import (
     OutputTranscript,
     Reconnected,
     SessionError,
-    SessionSpec,
     SpeechEnded,
     SpeechStarted,
     ToolCall,
@@ -35,12 +34,11 @@ from gateway.providers.base import (
     TurnComplete,
     Usage,
 )
-from gateway.tools import TOOL_SPECS, Toolbox
+from gateway.tools import Toolbox
 
 log = logging.getLogger("gateway.session")
 
 TOOL_TIMEOUT_S = 5.0
-WEEKDAYS_VI = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ nhật"]
 
 
 class Transport(Protocol):
@@ -51,20 +49,6 @@ class Transport(Protocol):
     async def clear_playback(self) -> None: ...
 
     async def notify(self, message: dict) -> None: ...
-
-
-def build_spec(settings: Settings, now: datetime | None = None) -> SessionSpec:
-    tz = ZoneInfo(settings.default_timezone)
-    now = now or datetime.now(tz)
-    template = Path(ROOT / "agents" / "receptionist.vi.md").read_text(encoding="utf-8")
-    prompt = template.format(
-        business_name=settings.business_name,
-        today=now.strftime("%d/%m/%Y"),
-        weekday=WEEKDAYS_VI[now.weekday()],
-        now_time=now.strftime("%H:%M"),
-        timezone=settings.default_timezone,
-    )
-    return SessionSpec(system_instruction=prompt, tools=TOOL_SPECS)
 
 
 class TurnAssembler:
@@ -135,12 +119,14 @@ class CallSession:
         toolbox: Toolbox | None = None,
         persist: bool = False,
         caller_number: str | None = None,
+        agent: AgentRuntime | None = None,
     ):
         self.provider = provider
         self.transport = transport
         self.settings = settings
         self.phone_sim = phone_sim
         self.toolbox = toolbox or Toolbox(tz=ZoneInfo(settings.default_timezone))
+        self.agent = agent or file_agent(settings)
         self.recorder = CallRecorder(
             settings=settings, mode=mode, provider=provider.name, model=getattr(provider, "model", "mock")
         )
@@ -160,9 +146,14 @@ class CallSession:
 
     async def run(self) -> dict:
         if self.persist:
-            self.sink.start(datetime.now(UTC), self.caller_number)
-        live = await self.provider.open(build_spec(self.settings))
-        self.recorder.log("session_open", provider=self.provider.name)
+            self.sink.start(datetime.now(UTC), self.caller_number, self.agent.version_id)
+        live = await self.provider.open(build_spec(self.settings, self.agent))
+        self.recorder.log(
+            "session_open",
+            provider=self.provider.name,
+            agent_source=self.agent.source,
+            agent_version=self.agent.number,
+        )
         await self.transport.notify(
             {
                 "type": "ready",
@@ -171,6 +162,8 @@ class CallSession:
                 "model": self.recorder.model,
                 "phone_sim": self.phone_sim,
                 "persist": self.persist,
+                "agent_version": self.agent.number,
+                "agent_source": self.agent.source,
             }
         )
         pump_in = asyncio.create_task(self._pump_in(live))
@@ -192,6 +185,11 @@ class CallSession:
             persistence = await self.sink.close(outcome=outcome)
         summary = self.recorder.summary()
         summary["persistence"] = persistence
+        summary["agent"] = {
+            "source": self.agent.source,
+            "version": self.agent.number,
+            "version_id": self.agent.version_id,
+        }
         path = self.recorder.write()
         summary["report_path"] = str(path)
         await self._safe_notify({"type": "summary", "summary": summary})
@@ -265,6 +263,9 @@ class CallSession:
                         return
 
     async def _execute(self, call: ToolCall) -> dict:
+        if call.name not in self.agent.tools:
+            # the model asked for a tool this agent version does not allow (AC04)
+            return {"status": "unavailable", "message": "Công cụ này không được cấp cho agent"}
         if call.name == "request_handoff" and self.persist:
             # a real inbox task, or an honest failure the agent must relay (never "đã chuyển" without it)
             created = await self.sink.request_handoff(

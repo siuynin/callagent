@@ -1,7 +1,9 @@
 import "server-only";
 
-// Server-side API client. The dev bearer token stays on the server; M1 replaces it with the
-// signed-in user's session (OIDC) without changing callers.
+import { getSession, oidcEnabled } from "@/lib/session";
+
+// Server-side API client. Sends the signed-in user's OIDC ID token from the encrypted session cookie
+// (ADR 0008); DEV_AUTH_TOKEN is only used when OIDC is not configured. Tokens never reach the browser.
 const API_ORIGIN = process.env.API_ORIGIN ?? "http://127.0.0.1:8000";
 
 export type ApiErrorBody = {
@@ -94,6 +96,12 @@ export type Task = {
 
 export type TaskSummary = { unassigned: number; overdue: number; in_progress: number; resolved: number };
 export type Member = { user_id: string; name: string; role: Me["role"] };
+export type AdminMember = Member & {
+  email: string;
+  status: "active" | "invited";
+  last_login_at: string | null;
+  invited_at: string;
+};
 
 export type TaskPatch = Partial<{
   owner_id: string | null;
@@ -104,14 +112,75 @@ export type TaskPatch = Partial<{
   resolution_note: string | null;
 }>;
 
+export type AgentConfig = {
+  instructions: string;
+  greeting: string;
+  business_name: string;
+  provider: "openai" | "gemini";
+  voice: string;
+  tools: ("check_available_slots" | "create_appointment" | "request_handoff")[];
+  vad_silence_ms: number;
+  eval_max_p95_ms: number;
+};
+
+export type AgentEval = {
+  status: "running" | "finished" | "stale" | null;
+  passed: boolean | null;
+  valid_for_current_config: boolean;
+  summary: {
+    scenarios?: number;
+    passed?: number;
+    failed?: string[];
+    false_confirmations?: number;
+    worst_p95_ms?: number | null;
+    max_p95_ms?: number;
+    provider?: string;
+    duration_s?: number;
+    note?: string;
+    checks?: Record<string, { check: string; passed: boolean; got?: unknown }[]>;
+    errors?: Record<string, string>;
+  } | null;
+  requested_at: string | null;
+  finished_at: string | null;
+  rolled_back_from: number | null;
+  error: string | null;
+};
+
+export type AgentVersion = {
+  id: string;
+  number: number;
+  status: "draft" | "published" | "retired";
+  active: boolean;
+  published_at: string | null;
+  created_at: string;
+  eval: AgentEval | null;
+};
+
+export type Agent = {
+  id: string;
+  name: string;
+  purpose: string;
+  description: string | null;
+  version: number;
+  active_version: AgentVersion | null;
+  draft: AgentVersion | null;
+  provider: string | null;
+  calls_today: number;
+  versions?: AgentVersion[];
+  active_config?: AgentConfig | null;
+  draft_config?: AgentConfig | null;
+};
+
 export type Page<T> = { items: T[]; next_cursor: string | null; trace_id: string };
 
 type Options = { method?: string; body?: unknown; headers?: Record<string, string>; auth?: boolean };
 
 async function request<T>(path: string, { method = "GET", body, headers = {}, auth = true }: Options = {}): Promise<T> {
   const h: Record<string, string> = { accept: "application/json", ...headers };
-  const token = process.env.DEV_AUTH_TOKEN;
-  if (auth && token) h.authorization = `Bearer ${token}`;
+  if (auth) {
+    const token = oidcEnabled() ? (await getSession())?.idToken : process.env.DEV_AUTH_TOKEN;
+    if (token) h.authorization = `Bearer ${token}`;
+  }
   if (body !== undefined) h["content-type"] = "application/json";
   const res = await fetch(`${API_ORIGIN}/api/v1${path}`, {
     method,
@@ -162,12 +231,27 @@ export const api = {
       headers: { "if-match": String(version) },
     }),
   members: () => request<{ items: Member[] }>("/members"),
+  adminMembers: () => request<{ items: AdminMember[] }>("/admin/members"),
+  inviteMember: (body: { email: string; display_name: string; role: Me["role"] }) =>
+    request<{ data: AdminMember }>("/admin/members", { method: "POST", body }),
+  changeRole: (userId: string, role: Me["role"]) =>
+    request<{ data: AdminMember }>(`/admin/members/${encodeURIComponent(userId)}`, { method: "PATCH", body: { role } }),
+  removeMember: (userId: string) =>
+    request<{ removed: boolean; released_tasks: number }>(`/admin/members/${encodeURIComponent(userId)}`, { method: "DELETE" }),
+  agents: () => request<{ items: Agent[] }>("/agents"),
+  agent: (id: string) => request<{ data: Agent }>(`/agents/${encodeURIComponent(id)}`),
+  createAgent: (body: { name: string; description?: string }) =>
+    request<{ data: Agent }>("/agents", { method: "POST", body }),
+  saveDraft: (id: string, agentVersion: number, config: AgentConfig) =>
+    request<{ data: Agent }>(`/agents/${encodeURIComponent(id)}/draft`, {
+      method: "PUT",
+      body: { config },
+      headers: { "if-match": String(agentVersion) },
+    }),
+  runEval: (id: string) => request<{ data: AgentVersion }>(`/agents/${encodeURIComponent(id)}/draft/eval`, { method: "POST" }),
+  publish: (id: string, versionId: string) =>
+    request<{ data: Agent }>(`/agents/${encodeURIComponent(id)}/publish`, { method: "POST", body: { version_id: versionId } }),
+  rollback: (id: string, versionId: string) =>
+    request<{ data: Agent }>(`/agents/${encodeURIComponent(id)}/rollback`, { method: "POST", body: { version_id: versionId } }),
 };
 
-export const ROLE_LABEL: Record<Me["role"], string> = {
-  owner: "Chủ sở hữu",
-  admin: "Quản trị viên",
-  manager: "Quản lý",
-  staff: "Nhân viên",
-  auditor: "Kiểm soát",
-};

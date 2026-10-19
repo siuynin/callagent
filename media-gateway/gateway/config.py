@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     backend_url: str = "http://127.0.0.1:8000"
     gateway_service_token: str = ""
     gateway_tenant_id: str = ""
+    gateway_agent_id: str = ""  # empty = the tenant's first published receptionist
+    eval_scenarios_dir: Path = GATEWAY_DIR.parent / "eval" / "scenarios"
 
     # Gemini Live (ADR 0003)
     gemini_api_key: str = ""

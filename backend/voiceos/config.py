@@ -25,8 +25,13 @@ class Settings(BaseSettings):
     notify_provider: str = "mock"
     outbound_enabled: bool = False
 
+    # OIDC sign-in (ADR 0008): ID tokens from this issuer for this client are accepted
+    oidc_issuer: str = ""
+    oidc_audience: str = ""  # the web app's client id
+
     # media gateway -> backend internal API (ADR 0006); empty disables /internal/*
     gateway_service_token: str = ""
+    gateway_url: str = "http://127.0.0.1:8100"  # backend -> gateway (eval requests)
 
     @field_validator("database_url")
     @classmethod

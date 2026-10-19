@@ -16,8 +16,9 @@ import time
 import wave
 from pathlib import Path
 
+from gateway.agent import AgentRuntime
 from gateway.audio import resample
-from gateway.config import get_settings
+from gateway.config import Settings, get_settings
 from gateway.providers import make_provider
 from gateway.session import CallSession
 
@@ -151,9 +152,15 @@ def _norm(v):
     return v
 
 
-async def run_scenario(path: Path, provider_name: str | None, persist: bool = False) -> dict:
+async def run_scenario(
+    path: Path,
+    provider_name: str | None,
+    persist: bool = False,
+    agent: AgentRuntime | None = None,
+    settings: Settings | None = None,
+) -> dict:
     scenario = json.loads(path.read_text(encoding="utf-8"))
-    settings = get_settings()
+    settings = settings or get_settings()
     base = path.parent
     turns = [load_wav_16k_mono((base / t["audio"]).resolve()) for t in scenario["turns"]]
     transport = FileTransport(turns)
@@ -164,6 +171,7 @@ async def run_scenario(path: Path, provider_name: str | None, persist: bool = Fa
         mode="eval",
         phone_sim=scenario.get("phone_sim"),
         persist=persist,
+        agent=agent,
     )
     transport.session = session
     summary = await session.run()

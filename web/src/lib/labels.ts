@@ -1,5 +1,5 @@
 import type { Tone } from "@/components/ui/primitives";
-import type { TaskStatus, TaskType } from "@/lib/api";
+import type { Me, TaskStatus, TaskType } from "@/lib/api";
 
 // Vietnamese labels shared by server and client components (keep out of "use client" modules).
 
@@ -67,3 +67,11 @@ export function dueLabel(dueAt: string | null, overdue: boolean, nowIso: string)
   if (day(due) === day(tomorrow)) return `Ngày mai · ${time}`;
   return `${day(due)} · ${time}`;
 }
+
+export const ROLE_LABEL: Record<Me["role"], string> = {
+  owner: "Chủ sở hữu",
+  admin: "Quản trị viên",
+  manager: "Quản lý",
+  staff: "Nhân viên",
+  auditor: "Kiểm soát",
+};

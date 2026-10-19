@@ -18,7 +18,7 @@ export const NAV: NavItem[] = [
   { href: "/cuoc-goi", label: "Cuộc gọi", icon: "calls", ready: true },
   { href: "/khach-hang", label: "Khách hàng", icon: "customers", ready: true },
   { href: "/lich-hen", label: "Lịch hẹn & công việc", icon: "tasks", ready: false },
-  { group: "AI & DỮ LIỆU", href: "/agents", label: "Voice Agents", icon: "agents", ready: false },
+  { group: "AI & DỮ LIỆU", href: "/agents", label: "Voice Agents", icon: "agents", ready: true },
   { href: "/tri-thuc", label: "Kho tri thức", icon: "knowledge", ready: false },
   { href: "/chien-dich", label: "Chiến dịch gọi", icon: "campaigns", ready: false },
   { href: "/tu-dong-hoa", label: "Tự động hóa", icon: "automations", ready: false },
@@ -27,7 +27,7 @@ export const NAV: NavItem[] = [
   { group: "QUẢN TRỊ", href: "/sip", label: "Số điện thoại & SIP", icon: "sip", ready: false },
   { href: "/bao-cao", label: "Báo cáo", icon: "reports", ready: false },
   { href: "/chi-phi", label: "Chi phí & sử dụng", icon: "billing", ready: false },
-  { href: "/cai-dat", label: "Cài đặt", icon: "settings", ready: false },
+  { href: "/cai-dat", label: "Cài đặt", icon: "settings", ready: true },
 ];
 
 /** Nav item that owns a pathname (detail pages highlight their list page, like the template). */

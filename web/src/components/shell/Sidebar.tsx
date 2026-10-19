@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { activeItem, NAV } from "@/lib/nav";
 
-export type Viewer = { name: string; roleLabel: string; workspace: string; initials: string } | null;
+export type Viewer = { name: string; roleLabel: string; workspace: string; initials: string; canSignOut: boolean } | null;
 
 export function Sidebar({ viewer }: { viewer: Viewer }) {
   const pathname = usePathname();
@@ -64,6 +64,13 @@ export function SidebarView({ viewer, activeHref }: { viewer: Viewer; activeHref
           <b>{viewer?.name ?? "Khách"}</b>
           <p>{viewer?.roleLabel ?? ""}</p>
         </div>
+        {viewer?.canSignOut && (
+          <form method="post" action="/auth/logout" style={{ marginLeft: "auto" }}>
+            <button type="submit" className="flat" title="Đăng xuất" aria-label="Đăng xuất">
+              ⎋
+            </button>
+          </form>
+        )}
       </div>
     </aside>
   );

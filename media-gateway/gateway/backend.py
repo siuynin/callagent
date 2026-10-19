@@ -51,6 +51,7 @@ class BackendSink:
     _tool_seq: int = 0
     _started_at: datetime | None = None
     _caller_number: str | None = None
+    _agent_version_id: str | None = None
 
     @property
     def enabled(self) -> bool:
@@ -76,12 +77,18 @@ class BackendSink:
 
     # --- lifecycle ---
 
-    def start(self, started_at: datetime | None = None, caller_number: str | None = None) -> None:
+    def start(
+        self,
+        started_at: datetime | None = None,
+        caller_number: str | None = None,
+        agent_version_id: str | None = None,
+    ) -> None:
         if not self.enabled:
             return
         self.client = self.client or httpx.AsyncClient()
         self._started_at = started_at or datetime.now(UTC)
         self._caller_number = caller_number
+        self._agent_version_id = agent_version_id
         self._task = asyncio.create_task(self._drain())
 
     async def _ensure_call(self) -> bool:
@@ -94,6 +101,8 @@ class BackendSink:
         }
         if self._caller_number:
             body["caller_number"] = self._caller_number
+        if self._agent_version_id:
+            body["agent_version_id"] = self._agent_version_id
         try:
             self.call_id = (await self._post("/calls", body))["id"]
             return True

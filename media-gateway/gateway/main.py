@@ -9,10 +9,12 @@ import asyncio
 import json
 import logging
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Header, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from gateway import evals
+from gateway.agent import fetch_active_agent, settings_for
 from gateway.config import ROOT, get_settings
 from gateway.providers import make_provider
 from gateway.session import CallSession
@@ -97,14 +99,20 @@ async def spike(ws: WebSocket, phone_sim: str | None = None, provider: str | Non
     transport = WebSocketTransport(ws)
     codec = phone_sim if phone_sim in ("alaw", "ulaw") else None
     try:
-        live_provider = make_provider(settings, provider)
+        # live calls run the published active agent version (never a draft); bundled prompt if unreachable
+        agent = await fetch_active_agent(settings)
+        provider = provider or (agent.config.get("provider") if agent else None)
+        live_provider = make_provider(
+            settings_for(settings, agent, provider or settings.ai_provider), provider
+        )
         session = CallSession(
             live_provider,
             transport,
-            settings,
+            settings_for(settings, agent, live_provider.name),
             mode="browser_phone_sim" if codec else "browser",
             phone_sim=codec,
             persist=True,  # spike calls appear in the web app when ADR 0006 config is set
+            agent=agent,
         )
         summary = await session.run()
         log.info("call %s done: %s", summary["call_id"], summary)
@@ -114,6 +122,18 @@ async def spike(ws: WebSocket, phone_sim: str | None = None, provider: str | Non
     finally:
         if not transport.closed:
             await ws.close()
+
+
+@app.post("/internal/eval", status_code=202)
+async def internal_eval(req: evals.EvalRequest, x_service_token: str | None = Header(default=None)):
+    """Backend asks for a publish-gating eval of a draft agent version (ADR 0007)."""
+    settings = get_settings()
+    if not evals.authorized(settings, x_service_token, req.tenant_id):
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    if evals.busy():
+        return JSONResponse(status_code=409, content={"error": "eval_running"})
+    asyncio.create_task(evals.run_suite(settings, req))
+    return {"accepted": True, "scenarios": len(evals.scenario_paths(settings))}
 
 
 def run() -> None:

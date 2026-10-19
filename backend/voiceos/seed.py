@@ -8,8 +8,10 @@ import uuid
 from sqlalchemy import select
 
 from voiceos import db
+from voiceos.agents.config import config_hash, default_config
+from voiceos.db import utcnow
 from voiceos.domain.phone import normalize_vn_phone
-from voiceos.models import Contact, Membership, Tenant, User
+from voiceos.models import Agent, AgentVersion, Contact, Membership, Tenant, User
 
 # fixed ids so dev tokens stay stable across reseeds
 TENANT_A = uuid.UUID("00000000-0000-4000-8000-00000000000a")
@@ -23,6 +25,44 @@ SAMPLE_CONTACTS = [
     ("Khách mẫu B", "0900000002", "Lái thử"),
     ("Khách mẫu C", "12345", "Bảo dưỡng"),
 ]
+
+
+def seed_agents(session) -> bool:
+    """One published receptionist per demo tenant (idempotent). v1 = the prompt that passed the TTS eval."""
+    created = False
+    for tenant in session.scalars(select(Tenant).where(Tenant.id.in_([TENANT_A, TENANT_B]))):
+        if session.scalar(select(Agent.id).where(Agent.tenant_id == tenant.id)):
+            continue
+        agent = Agent(
+            tenant_id=tenant.id,
+            name="Lễ tân AI",
+            purpose="receptionist",
+            description="Tiếp nhận cuộc gọi đến, đặt lịch, chuyển nhân viên khi cần.",
+        )
+        session.add(agent)
+        session.flush()
+        config = default_config(tenant.name)
+        version = AgentVersion(
+            tenant_id=tenant.id,
+            agent_id=agent.id,
+            number=1,
+            status="published",
+            config=config,
+            published_at=utcnow(),
+            test_result={
+                "status": "finished",
+                "passed": True,
+                "bootstrap": True,
+                "config_hash": config_hash(config),
+                "summary": {"note": "Khởi tạo từ prompt đã đạt 2/2 kịch bản TTS với OpenAI ngày 19/10/2026"},
+            },
+        )
+        session.add(version)
+        session.flush()
+        agent.active_version_id = version.id
+        created = True
+    session.commit()
+    return created
 
 
 def seed(session) -> None:
@@ -58,12 +98,14 @@ def seed(session) -> None:
             )
         )
     session.commit()
+    seed_agents(session)
 
 
 if __name__ == "__main__":
     factory = db.configure()
     with factory() as s:
         seed(s)
+        seed_agents(s)
     print("Dev tokens (APP_ENV=dev, DEV_AUTH=true):")
     print(f"  admin A : Bearer dev:{USER_ADMIN_A}")
     print(f"  staff A : Bearer dev:{USER_STAFF_A}")
