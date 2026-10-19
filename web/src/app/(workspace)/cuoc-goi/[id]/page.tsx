@@ -23,9 +23,11 @@ function at(ms: number) {
 }
 
 function resultText(r: CallDetail["tool_runs"][number]) {
-  const res = r.result ?? {};
+  // gateway results nest details in `data`; seed data keeps them flat
+  const res = { ...(r.result ?? {}), ...((r.result?.data as Record<string, unknown>) ?? {}) };
   if (r.tool === "create_appointment" && res.appointment_id) return `${res.appointment_id} · thành công`;
   if (r.tool === "request_handoff" && res.handoff_status === "queued") return "đã xếp hàng, nhân viên CHƯA nhận";
+  if (r.tool === "request_handoff" && r.status !== "ok") return "chưa ghi nhận được, cần gọi lại khách";
   return r.status === "ok" ? "thành công" : r.status;
 }
 

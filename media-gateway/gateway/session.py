@@ -7,12 +7,15 @@ state is shared between calls (plan/docs/02 Isolation).
 
 import asyncio
 import logging
-from datetime import datetime
+import time
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
 from gateway.audio import phone_channel_sim
+from gateway.backend import BackendSink
 from gateway.config import ROOT, Settings
 from gateway.metrics import CallRecorder
 from gateway.providers.base import (
@@ -64,6 +67,62 @@ def build_spec(settings: Settings, now: datetime | None = None) -> SessionSpec:
     return SessionSpec(system_instruction=prompt, tools=TOOL_SPECS)
 
 
+class TurnAssembler:
+    """Turns provider transcript fragments into stored call turns.
+
+    Each turn keeps the time its speaker STARTED, not when the text arrived: OpenAI delivers the caller's
+    transcript after the agent has already started answering, and arrival order would put it after the reply.
+    """
+
+    def __init__(self, sink: BackendSink, clock: Callable[[], int]):
+        self.sink, self.clock = sink, clock
+        self.caller_text, self.caller_start, self.caller_speech_start = "", None, None
+        self.agent_text, self.agent_start = "", None
+
+    @staticmethod
+    def _join(a: str, b: str) -> str:
+        if a and b and not a.endswith(" ") and not b.startswith(" ") and a[-1] in ".?!,;:":
+            return f"{a} {b}"
+        return a + b
+
+    def speech_started(self) -> None:
+        self.flush_caller()
+        self.caller_speech_start = self.clock()
+
+    def caller(self, text: str) -> None:
+        if self.caller_start is None:
+            self.caller_start = (
+                self.caller_speech_start if self.caller_speech_start is not None else self.clock()
+            )
+        self.caller_text = self._join(self.caller_text, text)
+
+    def agent_audio(self) -> None:
+        if self.agent_start is None:
+            self.agent_start = self.clock()
+
+    def agent(self, text: str) -> None:
+        self.agent_audio()
+        self.agent_text = self._join(self.agent_text, text)
+
+    def flush_caller(self) -> None:
+        if self.caller_text.strip():
+            self.sink.add_turn("customer", self.caller_text, self.caller_start or 0)
+            self.caller_text, self.caller_start, self.caller_speech_start = "", None, None
+
+    def flush_agent(self) -> None:
+        if self.agent_text.strip():
+            self.sink.add_turn("agent", self.agent_text, self.agent_start or 0)
+        self.agent_text, self.agent_start = "", None
+
+    def turn_complete(self) -> None:
+        self.flush_caller()  # keeps caller_speech_start when the caller transcript has not arrived yet
+        self.flush_agent()
+
+    def close(self) -> None:
+        self.flush_caller()
+        self.flush_agent()
+
+
 class CallSession:
     def __init__(
         self,
@@ -74,6 +133,8 @@ class CallSession:
         mode: str = "browser",
         phone_sim: str | None = None,
         toolbox: Toolbox | None = None,
+        persist: bool = False,
+        caller_number: str | None = None,
     ):
         self.provider = provider
         self.transport = transport
@@ -85,8 +146,21 @@ class CallSession:
         )
         self._cancelled_tools: set[str] = set()
         self.turn_complete = asyncio.Event()
+        # persistence is opt-in per call (browser spike: on; eval/smoke: off) and needs ADR 0006 config
+        self.sink = BackendSink(
+            settings=settings,
+            provider=f"gateway-{provider.name}"[:32],
+            provider_call_id=f"{mode}-{self.recorder.call_id}",
+        )
+        self.persist = persist and self.sink.enabled
+        self.caller_number = caller_number
+        self.turns = TurnAssembler(self.sink, lambda: int(self.recorder.now_ms()))
+        self._booked = False
+        self._handoff = False
 
     async def run(self) -> dict:
+        if self.persist:
+            self.sink.start(datetime.now(UTC), self.caller_number)
         live = await self.provider.open(build_spec(self.settings))
         self.recorder.log("session_open", provider=self.provider.name)
         await self.transport.notify(
@@ -96,6 +170,7 @@ class CallSession:
                 "provider": self.provider.name,
                 "model": self.recorder.model,
                 "phone_sim": self.phone_sim,
+                "persist": self.persist,
             }
         )
         pump_in = asyncio.create_task(self._pump_in(live))
@@ -110,7 +185,13 @@ class CallSession:
                 task.cancel()
             await live.close()
             self.recorder.log("session_closed")
+        persistence = {"enabled": False}
+        if self.persist:
+            self.turns.close()
+            outcome = "booked" if self._booked else "handoff" if self._handoff else None
+            persistence = await self.sink.close(outcome=outcome)
         summary = self.recorder.summary()
+        summary["persistence"] = persistence
         path = self.recorder.write()
         summary["report_path"] = str(path)
         await self._safe_notify({"type": "summary", "summary": summary})
@@ -138,20 +219,25 @@ class CallSession:
             match ev:
                 case AudioOut(data=data):
                     rec.on_agent_audio()
+                    self.turns.agent_audio()
                     await self.transport.play(data, live.output_rate)
                 case Interrupted():
                     rec.on_interrupted()
+                    self.turns.flush_agent()
                     await self.transport.clear_playback()
                     await self.transport.notify({"type": "interrupted"})
                 case SpeechStarted():
                     rec.log("provider_speech_start")
+                    self.turns.speech_started()
                 case SpeechEnded():
                     rec.on_speech_ended()
                 case InputTranscript(text=text):
                     rec.on_input_transcript(text)
+                    self.turns.caller(text)
                     await self.transport.notify({"type": "transcript", "role": "caller", "text": text})
                 case OutputTranscript(text=text):
                     rec.on_output_transcript(text)
+                    self.turns.agent(text)
                     await self.transport.notify({"type": "transcript", "role": "agent", "text": text})
                 case ToolCall():
                     asyncio.create_task(self._run_tool(live, ev))
@@ -160,6 +246,7 @@ class CallSession:
                     rec.log("tool_cancelled", ids=ids)
                 case TurnComplete():
                     rec.on_turn_complete()
+                    self.turns.turn_complete()
                     self.turn_complete.set()
                     await self.transport.notify(
                         {"type": "turn_complete", "latency_ms": rec.latencies_ms[-1:]}
@@ -177,16 +264,49 @@ class CallSession:
                     if fatal:
                         return
 
-    async def _run_tool(self, live, call: ToolCall) -> None:
-        self.recorder.on_tool_call(call.call_id, call.name, call.args)
-        await self.transport.notify({"type": "tool_call", "name": call.name, "args": call.args})
+    async def _execute(self, call: ToolCall) -> dict:
+        if call.name == "request_handoff" and self.persist:
+            # a real inbox task, or an honest failure the agent must relay (never "đã chuyển" without it)
+            created = await self.sink.request_handoff(
+                str(call.args.get("reason", "")), str(call.args.get("summary", ""))
+            )
+            if created is None:
+                return {
+                    "status": "unavailable",
+                    "message": (
+                        "Chưa ghi nhận được yêu cầu chuyển nhân viên. Xin số điện thoại và hẹn gọi lại."
+                    ),
+                }
+            return {
+                "status": "ok",
+                "source_provider": "voiceos",
+                "data": {"handoff_status": "queued", "task_id": created["task_id"]},
+            }
         try:
-            result = await asyncio.wait_for(
+            return await asyncio.wait_for(
                 asyncio.to_thread(self.toolbox.execute, call.name, call.args), TOOL_TIMEOUT_S
             )
         except TimeoutError:
-            result = {"status": "timeout", "message": "Hệ thống chưa phản hồi, chưa thực hiện được"}
+            return {"status": "timeout", "message": "Hệ thống chưa phản hồi, chưa thực hiện được"}
+
+    async def _run_tool(self, live, call: ToolCall) -> None:
+        self.recorder.on_tool_call(call.call_id, call.name, call.args)
+        await self.transport.notify({"type": "tool_call", "name": call.name, "args": call.args})
+        started_ms, t0 = int(self.recorder.now_ms()), time.monotonic()
+        result = await self._execute(call)
         self.recorder.on_tool_result(call.call_id, call.name, result)
+        if result.get("status") == "ok":
+            self._booked |= call.name == "create_appointment"
+            self._handoff |= call.name == "request_handoff"
+        if self.persist:
+            self.sink.add_tool_run(
+                tool=call.name,
+                call_key=call.call_id or f"{call.name}-{started_ms}",
+                args=call.args,
+                result=result,
+                started_ms=started_ms,
+                duration_ms=int((time.monotonic() - t0) * 1000),
+            )
         await self.transport.notify({"type": "tool_result", "name": call.name, "result": result})
         if call.call_id in self._cancelled_tools:
             return  # the model already moved on (barge-in); do not resend

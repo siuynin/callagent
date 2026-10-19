@@ -1,11 +1,11 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, UniqueConstraint, Uuid
+from sqlalchemy import JSON, ForeignKey, Integer, String, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from voiceos.db import Base
-from voiceos.models.base import TenantScoped, Versioned
+from voiceos.models.base import TenantScoped, UTCDateTime, Versioned
 
 
 class Agent(TenantScoped, Versioned, Base):
@@ -28,4 +28,4 @@ class AgentVersion(TenantScoped, Base):
     )  # draft|published|retired
     config: Mapped[dict] = mapped_column(JSON, nullable=False)
     test_result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)

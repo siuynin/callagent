@@ -151,7 +151,7 @@ def _norm(v):
     return v
 
 
-async def run_scenario(path: Path, provider_name: str | None) -> dict:
+async def run_scenario(path: Path, provider_name: str | None, persist: bool = False) -> dict:
     scenario = json.loads(path.read_text(encoding="utf-8"))
     settings = get_settings()
     base = path.parent
@@ -163,6 +163,7 @@ async def run_scenario(path: Path, provider_name: str | None) -> dict:
         settings,
         mode="eval",
         phone_sim=scenario.get("phone_sim"),
+        persist=persist,
     )
     transport.session = session
     summary = await session.run()
@@ -185,7 +186,7 @@ async def main_async(args) -> int:
     for p in paths:
         print(f"▶ {p.name}")
         try:
-            r = await run_scenario(p, args.provider)
+            r = await run_scenario(p, args.provider, args.persist)
         except Exception as exc:  # noqa: BLE001 - one broken scenario must not stop the run
             r = {"scenario": p.stem, "passed": False, "error": str(exc), "checks": []}
         report.append(r)
@@ -219,6 +220,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="VoiceOS voice eval runner")
     ap.add_argument("scenarios", nargs="+")
     ap.add_argument("--provider", choices=["mock", "gemini", "openai"])
+    ap.add_argument("--persist", action="store_true", help="store calls in the backend (ADR 0006)")
     ap.add_argument("--out", default=str(Path(__file__).resolve().parents[2] / "eval" / "results"))
     raise SystemExit(asyncio.run(main_async(ap.parse_args())))
 

@@ -86,6 +86,7 @@ def info():
         # only providers with a key on this machine; the key itself never leaves the gateway
         "providers": [{"name": p, "model": s.model_for(p)} for p in available],
         "business_name": s.business_name,
+        "persist": bool(s.gateway_service_token and s.gateway_tenant_id),
     }
 
 
@@ -103,6 +104,7 @@ async def spike(ws: WebSocket, phone_sim: str | None = None, provider: str | Non
             settings,
             mode="browser_phone_sim" if codec else "browser",
             phone_sim=codec,
+            persist=True,  # spike calls appear in the web app when ADR 0006 config is set
         )
         summary = await session.run()
         log.info("call %s done: %s", summary["call_id"], summary)

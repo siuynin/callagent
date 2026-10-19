@@ -1,11 +1,11 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Uuid
+from sqlalchemy import Boolean, ForeignKey, Index, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from voiceos.db import Base
-from voiceos.models.base import TenantScoped, Versioned
+from voiceos.models.base import TenantScoped, UTCDateTime, Versioned
 
 CONSENT_PURPOSES = ("service_call", "marketing_call", "recording", "sms", "zalo")
 
@@ -22,7 +22,7 @@ class Contact(TenantScoped, Versioned, Base):
     owner_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id"), nullable=True)
     lifecycle: Mapped[str] = mapped_column(String(32), default="new", nullable=False)
     need: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    optout_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    optout_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
 
 class ConsentRecord(TenantScoped, Base):
@@ -35,4 +35,4 @@ class ConsentRecord(TenantScoped, Base):
     granted: Mapped[bool] = mapped_column(Boolean, nullable=False)
     source: Mapped[str] = mapped_column(String(64), nullable=False)
     evidence_ref: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)

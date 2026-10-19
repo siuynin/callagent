@@ -3,6 +3,7 @@ import os
 # must be set before voiceos.config is imported anywhere
 os.environ.setdefault("APP_ENV", "dev")
 os.environ["DEV_AUTH"] = "true"
+os.environ["GATEWAY_SERVICE_TOKEN"] = "test-service-token"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     notify_provider: str = "mock"
     outbound_enabled: bool = False
 
+    # media gateway -> backend internal API (ADR 0006); empty disables /internal/*
+    gateway_service_token: str = ""
+
     @field_validator("database_url")
     @classmethod
     def _anchor_sqlite(cls, v: str) -> str:

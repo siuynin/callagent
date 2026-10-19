@@ -1,6 +1,6 @@
 # VoiceOS
 
-Nền tảng tổng đài AI tiếng Việt. Đặc tả nguồn: [`../plan`](../plan/README.md) (v1.1). Quyết định kiến trúc: [`docs/adr`](docs/adr) (Gemini Live: ADR 0003, OpenAI Realtime: ADR 0005).
+Nền tảng tổng đài AI tiếng Việt. Đặc tả nguồn: [`../plan`](../plan/README.md) (v1.1). Quyết định kiến trúc: [`docs/adr`](docs/adr) (Gemini Live: ADR 0003, OpenAI Realtime: ADR 0005, gateway ghi vào backend: ADR 0006).
 
 ## Trạng thái (19/10/2026)
 
@@ -56,6 +56,10 @@ python -m venv .venv && .venv/Scripts/python -m pip install -e ".[dev]"
 
 Mở http://127.0.0.1:8100, bấm "Bắt đầu cuộc gọi" và nói vào micro. Gateway chỉ nghe trên 127.0.0.1 để API key không ra ngoài máy.
 
+Lưu cuộc gọi vào VoiceOS (ADR 0006): đặt cùng một `GATEWAY_SERVICE_TOKEN` cho backend và gateway trong `.env`, cùng `GATEWAY_TENANT_ID` (tenant dev: `00000000-0000-4000-8000-00000000000a`) và `BACKEND_URL`. Khởi động lại cả hai. Khi đó mỗi cuộc gọi thử hiện ở màn Cuộc gọi kèm transcript và tool; khách đòi gặp nhân viên tạo việc trong Hộp việc; cuộc đặt lịch tạo việc xác nhận lịch hẹn. Eval chỉ lưu khi thêm `--persist`.
+
+Dữ liệu mẫu cho giao diện (chỉ dev): `.venv/Scripts/python -m voiceos.seed_demo` trong `backend/`.
+
 Web:
 
 ```bash
@@ -101,5 +105,4 @@ CI chạy backend trên Postgres, gateway với mock provider (không bao giờ 
 
 - OIDC, phân quyền theo chi nhánh, RLS Postgres.
 - Telephony thật (ADR 0004 chờ SIP trunk test và kết quả spike).
-- Lưu cuộc gọi từ gateway vào backend (call/turn/tool_run) — M1.
 - Inbox, handoff, lịch hẹn thật, thông báo nhân viên — M1.

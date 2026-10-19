@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from voiceos.api import errors
-from voiceos.api.routers import calls, contacts, system, tasks
+from voiceos.api.routers import calls, contacts, internal, system, tasks
 from voiceos.config import get_settings
 
 
@@ -21,7 +21,7 @@ def create_app() -> FastAPI:
             allow_headers=["*"],
             expose_headers=["x-trace-id"],
         )
-    for router in (system.router, contacts.router, calls.router, tasks.router):
+    for router in (system.router, contacts.router, calls.router, tasks.router, internal.router):
         app.include_router(router, prefix="/api/v1")
     return app
 

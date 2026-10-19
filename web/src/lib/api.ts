@@ -77,6 +77,7 @@ export type Task = {
   id: string;
   type: TaskType;
   title: string;
+  description: string | null;
   contact: { id: string; name: string } | null;
   call_id: string | null;
   owner: { id: string; name: string } | null;

@@ -11,6 +11,11 @@ import { HandoffActions } from "./HandoffActions";
 
 export const metadata: Metadata = { title: "Bàn giao nhân viên" };
 
+function handoffQueued(result: Record<string, unknown> | null): boolean {
+  const data = (result?.data as Record<string, unknown> | undefined) ?? {};
+  return result?.handoff_status === "queued" || data.handoff_status === "queued";
+}
+
 function Queue({ tasks, selected }: { tasks: Task[]; selected?: string }) {
   if (!tasks.length) {
     return (
@@ -77,6 +82,12 @@ async function HandoffData({ searchParams }: { searchParams: Promise<Record<stri
                 <label>Lý do chuyển</label>
                 <p>{current.title}</p>
               </div>
+              {current.description && (
+                <div className="field">
+                  <label>Tóm tắt của AI</label>
+                  <p>{current.description}</p>
+                </div>
+              )}
               <div className="field">
                 <label>Khách nói</label>
                 {customerSaid.length ? customerSaid.map((t) => <p key={t.seq}>“{t.text}”</p>) : <p>Không có transcript.</p>}
@@ -89,7 +100,7 @@ async function HandoffData({ searchParams }: { searchParams: Promise<Record<stri
                 <label>Công cụ đã gọi</label>
                 <p>
                   {call?.tool_runs.length
-                    ? call.tool_runs.map((r) => `${r.tool} → ${r.result?.handoff_status === "queued" ? "đã xếp hàng, chưa có người nhận" : r.status}`).join(" · ")
+                    ? call.tool_runs.map((r) => `${r.tool} → ${handoffQueued(r.result) ? "đã xếp hàng, chưa có người nhận" : r.status}`).join(" · ")
                     : "Không có"}
                 </p>
               </div>

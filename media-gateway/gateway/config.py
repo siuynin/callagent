@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     vad_silence_ms: int = 600
     vad_prefix_padding_ms: int = 120
 
+    # persistence to the backend internal API (ADR 0006); empty token or tenant = disabled
+    backend_url: str = "http://127.0.0.1:8000"
+    gateway_service_token: str = ""
+    gateway_tenant_id: str = ""
+
     # Gemini Live (ADR 0003)
     gemini_api_key: str = ""
     ai_model: str = "gemini-3.8-live"

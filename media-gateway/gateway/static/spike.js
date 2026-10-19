@@ -74,7 +74,7 @@
 
   function onEvent(m) {
     switch (m.type) {
-      case 'ready': status(`Đang gọi · ${m.provider} · ${m.model}${m.phone_sim ? ' · đường điện thoại 8 kHz' : ''}`); break;
+      case 'ready': status(`Đang gọi · ${m.provider} · ${m.model}${m.phone_sim ? ' · đường điện thoại 8 kHz' : ''}${m.persist ? ' · đang lưu vào VoiceOS' : ' · không lưu'}`); break;
       case 'audio_format':
         if (m.rate !== playRate) { playRate = m.rate; }
         break;
@@ -109,6 +109,10 @@
       case 'summary':
         $('summary').hidden = false;
         $('summary').textContent = JSON.stringify(m.summary, null, 2);
+        if (m.summary.persistence && m.summary.persistence.enabled) {
+          const p = m.summary.persistence;
+          bubble('system', p.unsent ? `Chưa lưu được ${p.unsent} bản ghi vào VoiceOS (backend không phản hồi)` : 'Đã lưu cuộc gọi vào VoiceOS · xem ở màn Cuộc gọi', p.unsent ? 'flag' : '');
+        }
         if (m.summary.false_confirmations > 0) bubble('system', `Cảnh báo: ${m.summary.false_confirmations} lần AI báo đã hoàn tất trước khi công cụ thành công`, 'flag');
         break;
     }

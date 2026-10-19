@@ -1,11 +1,11 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid
+from sqlalchemy import JSON, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from voiceos.db import Base, utcnow
-from voiceos.models.base import IdMixin, TenantScoped
+from voiceos.models.base import IdMixin, TenantScoped, UTCDateTime
 
 
 class AuditEvent(TenantScoped, Base):
@@ -28,12 +28,12 @@ class OutboxMessage(IdMixin, Base):
     tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), index=True, nullable=False)
     topic: Mapped[str] = mapped_column(String(64), nullable=False)
     payload: Mapped[dict] = mapped_column(JSON, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
-    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, nullable=False)
+    available_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     lock_owner: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    locked_until: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    dispatched_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 

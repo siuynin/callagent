@@ -1,11 +1,11 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid
+from sqlalchemy import JSON, Boolean, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from voiceos.db import Base
-from voiceos.models.base import TenantScoped, Versioned
+from voiceos.models.base import TenantScoped, UTCDateTime, Versioned
 
 
 class Call(TenantScoped, Versioned, Base):
@@ -21,9 +21,9 @@ class Call(TenantScoped, Versioned, Base):
     )
     provider: Mapped[str] = mapped_column(String(32), nullable=False)
     provider_call_id: Mapped[str] = mapped_column(String(128), nullable=False)
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    answered_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     technical_status: Mapped[str] = mapped_column(String(32), default="created", nullable=False)
     business_outcome: Mapped[str | None] = mapped_column(String(32), nullable=True)
     after_hours: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -54,5 +54,5 @@ class ToolRun(TenantScoped, Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False)  # ok|not_found|unavailable|error|timeout
     result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)

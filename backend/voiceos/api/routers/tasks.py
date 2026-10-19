@@ -36,6 +36,7 @@ class TaskIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     type: TaskType
     title: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
     contact_id: uuid.UUID | None = None
     call_id: uuid.UUID | None = None
     owner_id: uuid.UUID | None = None
@@ -64,6 +65,7 @@ def _out(task: Task, contact: Contact | None, owner: User | None, now: datetime)
         "id": str(task.id),
         "type": task.type,
         "title": task.title,
+        "description": task.description,
         "contact": {"id": str(contact.id), "name": contact.name} if contact else None,
         "call_id": str(task.call_id) if task.call_id else None,
         "owner": {"id": str(owner.id), "name": owner.display_name} if owner else None,
