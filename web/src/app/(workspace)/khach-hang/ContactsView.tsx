@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/Toast";
 import type { Contact } from "@/lib/api";
 import { PHONE_STATUS } from "@/lib/contacts";
 import { fold } from "@/lib/text";
+import { submitTo } from "@/lib/forms";
 
 import { createContactAction, type FormState } from "./actions";
 
@@ -97,6 +98,13 @@ function AddContactModal({ onClose }: { onClose: () => void }) {
   const toast = useToast();
   const [key] = useState(() => crypto.randomUUID());
   const [state, action, pending] = useActionState(createContactAction, INITIAL);
+  // controlled + submitTo(): a rejected submit keeps what the user typed
+  const [values, setValues] = useState({ name: "", phone: "", need: "" });
+  const bind = (k: keyof typeof values) => ({
+    name: k,
+    value: values[k],
+    onChange: (e: { target: { value: string } }) => setValues((v) => ({ ...v, [k]: e.target.value })),
+  });
 
   useEffect(() => {
     if (state.ok) {
@@ -120,22 +128,22 @@ function AddContactModal({ onClose }: { onClose: () => void }) {
         </>
       }
     >
-      <form id="addcontact" action={action} noValidate>
+      <form id="addcontact" onSubmit={submitTo(action)} noValidate>
         <input type="hidden" name="idempotency_key" value={key} />
         <div className="field">
           <label htmlFor="c-name">Tên khách hàng *</label>
-          <input id="c-name" name="name" autoComplete="off" aria-invalid={!!state.fieldErrors?.name} />
+          <input id="c-name" {...bind("name")} autoComplete="off" aria-invalid={!!state.fieldErrors?.name} />
           {state.fieldErrors?.name && <div className="fielderror">{state.fieldErrors.name}</div>}
         </div>
         <div className="field">
           <label htmlFor="c-phone">Số điện thoại *</label>
-          <input id="c-phone" name="phone" inputMode="tel" autoComplete="off" aria-invalid={!!state.fieldErrors?.phone} />
+          <input id="c-phone" {...bind("phone")} inputMode="tel" autoComplete="off" aria-invalid={!!state.fieldErrors?.phone} />
           {state.fieldErrors?.phone && <div className="fielderror">{state.fieldErrors.phone}</div>}
           <div className="small">Tự chuẩn hóa về +84. Số thiếu chữ số đầu được đánh dấu cần kiểm tra, không tự đoán.</div>
         </div>
         <div className="field">
           <label htmlFor="c-need">Nhu cầu</label>
-          <input id="c-need" name="need" placeholder="Ví dụ: lái thử SUV" />
+          <input id="c-need" {...bind("need")} placeholder="Ví dụ: lái thử SUV" />
         </div>
         {state.message && <div className="fielderror" role="alert">{state.message}</div>}
       </form>

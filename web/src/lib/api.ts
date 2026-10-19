@@ -52,11 +52,56 @@ export type Call = {
   id: string;
   direction: "inbound" | "outbound";
   contact_id: string | null;
+  contact_name: string | null;
+  provider: string;
   started_at: string;
+  answered_at: string | null;
   ended_at: string | null;
+  duration_s: number;
   technical_status: string;
   business_outcome: string | null;
+  after_hours: boolean;
 };
+
+export type CallDetail = {
+  data: Call;
+  turns: { seq: number; speaker: "customer" | "agent" | "staff"; text: string; started_ms: number; played_until_ms: number | null }[];
+  tool_runs: { seq: number; tool: string; args: Record<string, unknown>; status: string; result: Record<string, unknown> | null; started_ms: number }[];
+  tasks: { id: string; type: TaskType; title: string; status: TaskStatus }[];
+};
+
+export type TaskType = "missed_call" | "human_request" | "callback" | "appointment_confirm" | "follow_up";
+export type TaskStatus = "new" | "in_progress" | "resolved" | "cancelled";
+
+export type Task = {
+  id: string;
+  type: TaskType;
+  title: string;
+  contact: { id: string; name: string } | null;
+  call_id: string | null;
+  owner: { id: string; name: string } | null;
+  priority: "high" | "normal";
+  due_at: string | null;
+  overdue: boolean;
+  status: TaskStatus;
+  outcome: string | null;
+  resolution_note: string | null;
+  resolved_at: string | null;
+  version: number;
+  created_at: string;
+};
+
+export type TaskSummary = { unassigned: number; overdue: number; in_progress: number; resolved: number };
+export type Member = { user_id: string; name: string; role: Me["role"] };
+
+export type TaskPatch = Partial<{
+  owner_id: string | null;
+  status: TaskStatus;
+  priority: "high" | "normal";
+  due_at: string | null;
+  outcome: string | null;
+  resolution_note: string | null;
+}>;
 
 export type Page<T> = { items: T[]; next_cursor: string | null; trace_id: string };
 
@@ -101,7 +146,21 @@ export const api = {
       body,
       headers: { "if-match": String(version) },
     }),
-  calls: () => request<Page<Call>>("/calls?limit=5"),
+  calls: (limit = 5) => request<Page<Call>>(`/calls?limit=${limit}`),
+  call: (id: string) => request<CallDetail>(`/calls/${encodeURIComponent(id)}`),
+  tasks: () => request<{ items: Task[] }>("/tasks?limit=100"),
+  taskSummary: () => request<TaskSummary>("/tasks/summary"),
+  createTask: (
+    body: { type: TaskType; title: string; contact_id?: string; call_id?: string; priority?: "high" | "normal"; due_at?: string; owner_id?: string },
+    idempotencyKey: string,
+  ) => request<{ data: Task }>("/tasks", { method: "POST", body, headers: { "idempotency-key": idempotencyKey } }),
+  updateTask: (id: string, version: number, body: TaskPatch) =>
+    request<{ data: Task }>(`/tasks/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body,
+      headers: { "if-match": String(version) },
+    }),
+  members: () => request<{ items: Member[] }>("/members"),
 };
 
 export const ROLE_LABEL: Record<Me["role"], string> = {

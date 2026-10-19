@@ -112,7 +112,7 @@ async function SystemStatus() {
 const QUICK = [
   { href: "/khach-hang", icon: "customers", title: "Quản lý khách hàng", sub: "Thêm, tra cứu, cập nhật hồ sơ" },
   { href: "/voice-spike", icon: "spike", title: "Đo chất lượng lễ tân AI", sub: "So sánh Gemini và OpenAI" },
-  { href: "/hop-viec", icon: "inbox", title: "Hộp việc cần xử lý", sub: "Có từ M1" },
+  { href: "/hop-viec", icon: "inbox", title: "Hộp việc cần xử lý", sub: "Phân công, quá hạn, kết quả" },
 ] as const;
 
 export default function OverviewPage() {

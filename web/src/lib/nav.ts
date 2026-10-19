@@ -12,10 +12,10 @@ export type NavItem = {
 // Order, groups and labels follow plan/template (navs in app.js); routes use Vietnamese slugs.
 export const NAV: NavItem[] = [
   { group: "VẬN HÀNH", href: "/", label: "Tổng quan", icon: "overview", ready: true },
-  { href: "/hop-viec", label: "Hộp việc cần xử lý", icon: "inbox", ready: false },
+  { href: "/hop-viec", label: "Hộp việc cần xử lý", icon: "inbox", ready: true },
   { href: "/danh-sach-goi", label: "Danh sách gọi", icon: "diallists", ready: false },
-  { href: "/ban-giao", label: "Bàn giao nhân viên", icon: "handoff", ready: false },
-  { href: "/cuoc-goi", label: "Cuộc gọi", icon: "calls", ready: false },
+  { href: "/ban-giao", label: "Bàn giao nhân viên", icon: "handoff", ready: true },
+  { href: "/cuoc-goi", label: "Cuộc gọi", icon: "calls", ready: true },
   { href: "/khach-hang", label: "Khách hàng", icon: "customers", ready: true },
   { href: "/lich-hen", label: "Lịch hẹn & công việc", icon: "tasks", ready: false },
   { group: "AI & DỮ LIỆU", href: "/agents", label: "Voice Agents", icon: "agents", ready: false },

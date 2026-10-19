@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
 
 import { useToast } from "@/components/ui/Toast";
 import type { Contact } from "@/lib/api";
+import { submitTo } from "@/lib/forms";
 
 import { type FormState, updateContactAction } from "../actions";
 
@@ -12,24 +13,26 @@ const INITIAL: FormState = { ok: false };
 export function EditContactForm({ contact }: { contact: Contact }) {
   const toast = useToast();
   const [state, action, pending] = useActionState(updateContactAction, INITIAL);
+  // controlled: keep edits visible when the server rejects them (e.g. version conflict)
+  const [name, setName] = useState(contact.name);
+  const [need, setNeed] = useState(contact.need ?? "");
 
   useEffect(() => {
     if (state.ok) toast("Đã lưu hồ sơ khách hàng");
   }, [state, toast]);
 
   return (
-    // key on version: after a save the server sends the new version and the form resets to it
-    <form action={action} key={contact.version} noValidate>
+    <form onSubmit={submitTo(action)} noValidate>
       <input type="hidden" name="id" value={contact.id} />
       <input type="hidden" name="version" value={contact.version} />
       <div className="field">
         <label htmlFor="e-name">Tên khách hàng</label>
-        <input id="e-name" name="name" defaultValue={contact.name} aria-invalid={!!state.fieldErrors?.name} />
+        <input id="e-name" name="name" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={!!state.fieldErrors?.name} />
         {state.fieldErrors?.name && <div className="fielderror">{state.fieldErrors.name}</div>}
       </div>
       <div className="field">
         <label htmlFor="e-need">Nhu cầu</label>
-        <input id="e-need" name="need" defaultValue={contact.need ?? ""} />
+        <input id="e-need" name="need" value={need} onChange={(e) => setNeed(e.target.value)} />
       </div>
       <div className="field">
         <label>Nhân viên phụ trách</label>

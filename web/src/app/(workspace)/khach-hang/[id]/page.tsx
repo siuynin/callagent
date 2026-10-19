@@ -56,7 +56,8 @@ async function Profile({ params }: { params: Promise<{ id: string }> }) {
         </Card>
         <Card title="Thông tin & chăm sóc">
           <div className="pad">
-            <EditContactForm contact={contact} />
+            {/* keyed on version: a newer server copy re-initialises the controlled fields */}
+            <EditContactForm key={contact.version} contact={contact} />
           </div>
         </Card>
       </div>
