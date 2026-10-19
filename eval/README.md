@@ -7,6 +7,15 @@ Mục tiêu: đo trên dữ liệu lặp lại được thay vì cảm nhận kh
 - Mỗi file chỉ chứa câu nói của khách, im lặng ngắn ở đầu/cuối. Runner tự chèn im lặng chờ AI trả lời.
 - File audio chứa giọng người thật: chỉ dùng khi người nói đồng ý, không commit (`audio/*.wav` đã gitignore).
 
+## Giọng tổng hợp (TTS) để thử nhanh
+Kịch bản `scenarios/tts-*.json` có `"synthetic": true`: giọng khách được tạo bằng OpenAI TTS, không phải người thật. Dùng để kiểm tra logic agent và đường âm thanh, **không thay** bản ghi giọng thật các vùng miền cho gate G-V.
+```bash
+cd ../media-gateway
+.venv/Scripts/python -m gateway.tts_fixtures "../eval/scenarios/tts-*.json"            # tạo file còn thiếu
+.venv/Scripts/python -m gateway.tts_fixtures "../eval/scenarios/tts-*.json" --verify   # kiểm tra lại file đã có
+```
+Mỗi file được chuyển ngược thành chữ và so với câu gốc; TTS thỉnh thoảng đọc lặp câu, khi đó công cụ tự tạo lại (tối đa 3 lần) và báo ✗ nếu vẫn lệch.
+
 ## Định dạng scenario (`scenarios/*.json`)
 ```json
 {
@@ -34,8 +43,9 @@ Mục tiêu: đo trên dữ liệu lặp lại được thay vì cảm nhận kh
 ```bash
 cd ../media-gateway
 .venv/Scripts/python -m gateway.eval_runner "../eval/scenarios/*.json" --provider gemini
+.venv/Scripts/python -m gateway.eval_runner "../eval/scenarios/*.json" --provider openai
 ```
-Kết quả: `results/eval-<thời gian>.json` (gitignore vì chứa transcript) gồm từng check, độ trễ p50/p95, số lần xác nhận sai, token.
+Chạy cùng bộ kịch bản cho từng provider để so sánh. Kết quả: `results/eval-<thời gian>.json` (gitignore vì chứa transcript) gồm từng check, độ trễ p50/p95, số lần xác nhận sai, token.
 
 ## Ngưỡng G-V đề xuất (chủ sản phẩm duyệt lại)
 | Chỉ số | Ngưỡng |

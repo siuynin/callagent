@@ -1,13 +1,13 @@
 # VoiceOS
 
-Nền tảng tổng đài AI tiếng Việt. Đặc tả nguồn: [`../plan`](../plan/README.md) (v1.1). Quyết định kiến trúc: [`docs/adr`](docs/adr).
+Nền tảng tổng đài AI tiếng Việt. Đặc tả nguồn: [`../plan`](../plan/README.md) (v1.1). Quyết định kiến trúc: [`docs/adr`](docs/adr) (Gemini Live: ADR 0003, OpenAI Realtime: ADR 0005).
 
 ## Trạng thái (19/10/2026)
 
 | Phần | Trạng thái |
 |---|---|
 | M0 nền tảng | Đang làm. Đã có repo, ADR 0001–0004, models + migration đầu, tenant scoping, RBAC, idempotency, If-Match, outbox worker, CI |
-| M0.5 voice spike | Code xong, **chưa đo với Gemini thật**. Gateway, adapter Gemini Live, mock, trang gọi thử, mô phỏng đường điện thoại 8 kHz, bộ đo, eval runner |
+| M0.5 voice spike | Code xong, **chưa đo với model thật**. Gateway, adapter Gemini Live và OpenAI Realtime (so sánh A/B), mock, trang gọi thử, mô phỏng đường điện thoại 8 kHz, bộ đo, eval runner |
 | Web | Khung Next.js: Tổng quan, Khách hàng (đọc API thật), trang voice spike |
 | Xác thực | Chỉ có token dev (`APP_ENV=dev`). OIDC ở M1 |
 | Postgres | CI chạy Postgres 17 + pgvector; máy dev đang dùng SQLite (ADR 0002) |
@@ -64,14 +64,26 @@ cd web && npm install && npm run dev
 
 Mở http://localhost:3000.
 
-## Đo voice spike với Gemini thật
+## Đo voice spike với model thật (Gemini và OpenAI)
 
-1. Trong `.env`: `AI_PROVIDER=gemini`, `GEMINI_API_KEY=...`. Model mặc định `gemini-3.8-live` theo tài liệu chính thức ngày 17/10/2026 (ADR 0003); đổi bằng `AI_MODEL` nếu tài khoản dùng tên khác.
-2. Khởi động lại gateway. Góc phải trang gọi thử phải hiện "Gemini Live · …".
-3. Gọi thử vài kịch bản: đặt lịch lái thử, đọc số điện thoại, hỏi trả góp (phải chuyển nhân viên), chen ngang khi AI đang nói. Lặp lại với ô "Mô phỏng đường điện thoại 8 kHz".
-4. Mỗi cuộc ghi một báo cáo JSON ở `media-gateway/reports/` (độ trễ p50/p95, ngắt lời, tool, số lần xác nhận sai, token).
-5. Muốn số đo lặp lại được: ghi âm kịch bản theo [`eval/README.md`](eval/README.md) rồi chạy `python -m gateway.eval_runner "../eval/scenarios/*.json" --provider gemini`.
-6. Chi phí/phút chỉ được tính khi điền `PRICE_*` từ trang giá chính thức; báo cáo ghi rõ cần đối chiếu với billing.
+1. Trong `voiceos/.env` điền key của provider muốn đo: `GEMINI_API_KEY=...` và/hoặc `OPENAI_API_KEY=...`. **Không dán key vào chat, issue hay commit.**
+   - Gemini: model mặc định `gemini-3.8-live` (ADR 0003), đổi bằng `AI_MODEL`.
+   - OpenAI: model mặc định `gpt-realtime-2.1`, giọng `marin` (ADR 0005); đổi bằng `OPENAI_REALTIME_MODEL`, `OPENAI_VOICE`, `OPENAI_VAD`.
+2. Kiểm tra nhanh không cần micro (mở phiên thật, chờ AI chào, đo thời gian tới âm thanh đầu tiên, tốn vài giây usage):
+   ```bash
+   cd media-gateway
+   .venv/Scripts/python -m gateway.smoke --provider openai
+   .venv/Scripts/python -m gateway.smoke --provider gemini
+   ```
+   `"ok": true` nghĩa là key, tên model và cấu hình session được API chấp nhận.
+3. Khởi động lại gateway. Ô "Nhà cung cấp" trên trang gọi thử chỉ liệt kê provider đã có key.
+4. Gọi cùng một kịch bản với từng provider: đặt lịch lái thử, đọc số điện thoại, hỏi trả góp (phải chuyển nhân viên), chen ngang khi AI đang nói. Lặp lại khi bật "Mô phỏng đường điện thoại 8 kHz".
+5. Mỗi cuộc ghi một báo cáo JSON ở `media-gateway/reports/` có `provider`, `model`, độ trễ p50/p95, ngắt lời, tool, số lần xác nhận sai, token.
+6. Số đo lặp lại được: ghi âm kịch bản theo [`eval/README.md`](eval/README.md), rồi chạy cùng bộ kịch bản cho từng provider:
+   `python -m gateway.eval_runner "../eval/scenarios/*.json" --provider gemini` và `--provider openai`.
+7. Chi phí/phút chỉ được tính khi điền `GEMINI_PRICE_*` / `OPENAI_PRICE_*` từ trang giá chính thức. Usage của OpenAI được cộng dồn theo từng response (mỗi lượt tính lại ngữ cảnh), chưa trừ giảm giá cache; luôn đối chiếu với billing.
+
+Nếu `.env` của bạn tạo từ bản trước còn các dòng `PRICE_*` không tiền tố provider, các dòng đó không còn được đọc; dùng tên mới ở `.env.example`.
 
 Báo cáo và file ghi âm chứa transcript/giọng nói nên không được commit (đã gitignore).
 

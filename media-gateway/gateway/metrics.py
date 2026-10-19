@@ -41,6 +41,8 @@ def _pct(values: list[float], p: float) -> float | None:
 class CallRecorder:
     settings: Settings
     mode: str  # browser | browser_phone_sim | eval
+    provider: str = "mock"
+    model: str = "mock"
     call_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     t0: float = field(default_factory=time.monotonic)
     events: list[dict] = field(default_factory=list)
@@ -60,6 +62,7 @@ class CallRecorder:
     _tool_started: dict[str, float] = field(default_factory=dict)
     _agent_audio_active: bool = False
     _flagged_this_turn: set[str] = field(default_factory=set)
+    _first_audio_seen: bool = False
 
     def now_ms(self) -> float:
         return round((time.monotonic() - self.t0) * 1000, 1)
@@ -92,6 +95,9 @@ class CallRecorder:
 
     def on_agent_audio(self) -> None:
         self._agent_audio_active = True
+        if not self._first_audio_seen:
+            self._first_audio_seen = True
+            self.log("first_agent_audio")
         if self._await_first_audio and self._eos is not None:
             latency = (time.monotonic() - self._eos) * 1000
             self.latencies_ms.append(latency)
@@ -141,49 +147,73 @@ class CallRecorder:
             self.successful_tools.add(name)
         self.log("tool_result", id=call_id, name=name, status=result.get("status"))
 
-    def on_usage(self, total: int, prompt: int, response: int, by_modality: dict) -> None:
+    def on_usage(
+        self, total: int, prompt: int, response: int, by_modality: dict, per_response: bool = False
+    ) -> None:
         self.usage.append(
-            {"total": total, "prompt": prompt, "response": response, "by_modality": by_modality}
+            {
+                "total": total,
+                "prompt": prompt,
+                "response": response,
+                "by_modality": by_modality,
+                "per_response": per_response,
+            }
         )
+
+    def usage_totals(self) -> dict | None:
+        """Per-response usage (OpenAI) is summed: every response re-bills the context, which is the
+        superlinear cost we need to see. Otherwise semantics are unverified and we keep the max snapshot."""
+        if not self.usage:
+            return None
+        if all(u["per_response"] for u in self.usage):
+            out = {
+                "total": 0,
+                "prompt": 0,
+                "response": 0,
+                "by_modality": {"prompt": {}, "response": {}},
+                "basis": "sum of per-response usage",
+                "responses": len(self.usage),
+            }
+            for u in self.usage:
+                for k in ("total", "prompt", "response"):
+                    out[k] += u[k]
+                for side in ("prompt", "response"):
+                    for mod, n in u["by_modality"].get(side, {}).items():
+                        out["by_modality"][side][mod] = out["by_modality"][side].get(mod, 0) + n
+            return out
+        last = max(self.usage, key=lambda u: u["total"])
+        return {**last, "basis": "max usage snapshot (semantics unverified)"}
 
     # --- report ---
 
     def _cost(self) -> dict | None:
-        s = self.settings
-        prices = [
-            s.price_audio_in_per_mtok,
-            s.price_audio_out_per_mtok,
-            s.price_text_in_per_mtok,
-            s.price_text_out_per_mtok,
-        ]
-        if not self.usage or any(p is None for p in prices):
+        p = self.settings.prices(self.provider)
+        totals = self.usage_totals()
+        if totals is None or not p.complete:
             return None
-        # usage messages may be cumulative or per turn depending on the provider: we take the
-        # snapshot with the largest total and flag it so the number is checked against billing
-        last = max(self.usage, key=lambda u: u["total"])
-        pm, rm = last["by_modality"].get("prompt", {}), last["by_modality"].get("response", {})
+        pm, rm = totals["by_modality"].get("prompt", {}), totals["by_modality"].get("response", {})
         usd = (
-            pm.get("AUDIO", 0) * s.price_audio_in_per_mtok
-            + pm.get("TEXT", 0) * s.price_text_in_per_mtok
-            + rm.get("AUDIO", 0) * s.price_audio_out_per_mtok
-            + rm.get("TEXT", 0) * s.price_text_out_per_mtok
+            pm.get("AUDIO", 0) * p.audio_in
+            + pm.get("TEXT", 0) * p.text_in
+            + rm.get("AUDIO", 0) * p.audio_out
+            + rm.get("TEXT", 0) * p.text_out
         ) / 1_000_000
         minutes = max(self.now_ms() / 60000, 1e-9)
         out = {
             "usd_total": round(usd, 6),
             "usd_per_minute": round(usd / minutes, 6),
-            "basis": "max usage snapshot; verify against billing console",
+            "basis": totals["basis"] + "; cached-token discounts not applied; verify against billing",
         }
-        if s.usd_to_vnd:
-            out["vnd_per_minute"] = round(usd / minutes * s.usd_to_vnd)
+        if self.settings.usd_to_vnd:
+            out["vnd_per_minute"] = round(usd / minutes * self.settings.usd_to_vnd)
         return out
 
     def summary(self) -> dict:
         return {
             "call_id": self.call_id,
             "mode": self.mode,
-            "provider": self.settings.ai_provider,
-            "model": self.settings.ai_model if self.settings.ai_provider == "gemini" else "mock",
+            "provider": self.provider,
+            "model": self.model,
             "duration_s": round(self.now_ms() / 1000, 1),
             "turns_measured": len(self.latencies_ms),
             "latency_ms": {
@@ -197,7 +227,7 @@ class CallRecorder:
             "tool_ms_p95": _pct(self.tool_ms, 95),
             "false_confirmations": len(self.false_confirms),
             "reconnects": sum(1 for e in self.events if e["kind"] == "reconnected"),
-            "usage_last": max(self.usage, key=lambda u: u["total"]) if self.usage else None,
+            "usage": self.usage_totals(),
             "cost_estimate": self._cost(),
         }
 

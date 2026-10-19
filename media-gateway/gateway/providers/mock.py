@@ -73,6 +73,20 @@ class MockLiveSession:
                 await self._queue.put(InputTranscript(f"[mock] lượt nói {self._turns} của khách"))
                 self._reply_task = asyncio.create_task(self._reply(self._turns))
 
+    async def greet(self) -> None:
+        """Speak first like the real providers do for an inbound call."""
+        self._reply_task = asyncio.create_task(self._speak("[mock] Dạ, showroom xin nghe, em là trợ lý AI."))
+
+    async def _speak(self, text: str) -> None:
+        await self._queue.put(OutputTranscript(text))
+        audio = _tone(1200)
+        step = int(OUT_RATE * CHUNK_MS / 1000) * 2
+        for i in range(0, len(audio), step):
+            await self._queue.put(AudioOut(audio[i : i + step]))
+            await asyncio.sleep(CHUNK_MS / 1000 / 4)  # faster than real time, like a real model
+        await self._queue.put(Usage(120, 80, 40, {"prompt": {"AUDIO": 80}, "response": {"AUDIO": 40}}))
+        await self._queue.put(TurnComplete())
+
     async def _reply(self, turn: int) -> None:
         await asyncio.sleep(0.25)  # pretend model latency
         if turn % 2 == 0 and self.spec.tools:
@@ -85,14 +99,7 @@ class MockLiveSession:
                 )
             )
             await self._tool_wait
-        await self._queue.put(OutputTranscript("[mock] Dạ, em là trợ lý AI thử nghiệm."))
-        audio = _tone(1200)
-        step = int(OUT_RATE * CHUNK_MS / 1000) * 2
-        for i in range(0, len(audio), step):
-            await self._queue.put(AudioOut(audio[i : i + step]))
-            await asyncio.sleep(CHUNK_MS / 1000 / 4)  # faster than real time, like a real model
-        await self._queue.put(Usage(120, 80, 40, {"prompt": {"AUDIO": 80}, "response": {"AUDIO": 40}}))
-        await self._queue.put(TurnComplete())
+        await self._speak("[mock] Dạ, em là trợ lý AI thử nghiệm.")
 
     async def send_tool_results(self, results: list[ToolResult]) -> None:
         if self._tool_wait and not self._tool_wait.done():
@@ -116,6 +123,9 @@ class MockLiveSession:
 
 class MockLiveProvider:
     name = "mock"
+    model = "mock"
 
     async def open(self, spec: SessionSpec) -> MockLiveSession:
-        return MockLiveSession(spec)
+        session = MockLiveSession(spec)
+        await session.greet()
+        return session

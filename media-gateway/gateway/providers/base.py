@@ -78,6 +78,9 @@ class Usage:
     prompt_tokens: int
     response_tokens: int
     by_modality: dict[str, dict[str, int]]  # {"prompt": {"AUDIO": n}, "response": {...}}
+    # True: this event covers one response only and must be summed (OpenAI Realtime, which re-bills the
+    # conversation context on every response). False: semantics unverified, recorder keeps the max snapshot.
+    per_response: bool = False
 
 
 @dataclass
@@ -128,5 +131,6 @@ class LiveSession(Protocol):
 
 class LiveProvider(Protocol):
     name: str
+    model: str
 
     async def open(self, spec: SessionSpec) -> LiveSession: ...

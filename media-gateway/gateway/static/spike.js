@@ -74,7 +74,7 @@
 
   function onEvent(m) {
     switch (m.type) {
-      case 'ready': status(`Đang gọi · ${m.provider}${m.phone_sim ? ' · đường điện thoại 8 kHz' : ''}`); break;
+      case 'ready': status(`Đang gọi · ${m.provider} · ${m.model}${m.phone_sim ? ' · đường điện thoại 8 kHz' : ''}`); break;
       case 'audio_format':
         if (m.rate !== playRate) { playRate = m.rate; }
         break;
@@ -115,7 +115,7 @@
   }
 
   async function start() {
-    $('start').disabled = true;
+    $('start').disabled = true; $('providerSelect').disabled = true;
     $('summary').hidden = true; $('transcript').innerHTML = ''; $('tools').innerHTML = '';
     turns = 0; interrupts = 0; $('turns').textContent = '0'; $('interrupts').textContent = '0'; $('lastLatency').textContent = '–';
     try {
@@ -132,8 +132,9 @@
     worklet = new AudioWorkletNode(captureCtx, 'capture');
     captureCtx.createMediaStreamSource(stream).connect(worklet);
 
-    const sim = $('phoneSim').checked ? '?phone_sim=alaw' : '';
-    ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/spike${sim}`);
+    const params = new URLSearchParams({ provider: $('providerSelect').value });
+    if ($('phoneSim').checked) params.set('phone_sim', 'alaw');
+    ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/spike?${params}`);
     ws.binaryType = 'arraybuffer';
     ws.onopen = () => { status('Đang mở phiên model…'); $('stop').disabled = false; };
     ws.onmessage = (e) => (typeof e.data === 'string' ? onEvent(JSON.parse(e.data)) : play(e.data));
@@ -157,15 +158,30 @@
     if (captureCtx) captureCtx.close();
     if (playCtx) playCtx.close();
     captureCtx = playCtx = stream = worklet = ws = null;
-    $('start').disabled = false; $('stop').disabled = true; $('level').style.width = '0';
+    $('start').disabled = false; $('providerSelect').disabled = false; $('stop').disabled = true; $('level').style.width = '0';
+  }
+
+  const LABELS = { mock: 'Mock · không gọi model thật', gemini: 'Gemini Live', openai: 'OpenAI Realtime' };
+
+  function showProvider() {
+    const opt = $('providerSelect').selectedOptions[0];
+    const el = $('provider');
+    el.textContent = opt ? opt.textContent : '–';
+    el.classList.toggle('mock', $('providerSelect').value === 'mock');
   }
 
   fetch('/api/info').then((r) => r.json()).then((info) => {
-    const el = $('provider');
-    el.textContent = info.provider === 'gemini' ? `Gemini Live · ${info.model}` : 'MOCK · không gọi model thật';
-    if (info.provider !== 'gemini') el.classList.add('mock');
-    if (info.provider === 'gemini' && !info.key_configured) el.textContent += ' · thiếu API key';
+    const sel = $('providerSelect');
+    for (const p of info.providers) {
+      const o = document.createElement('option');
+      o.value = p.name;
+      o.textContent = p.name === 'mock' ? LABELS.mock : `${LABELS[p.name]} · ${p.model}`;
+      sel.appendChild(o);
+    }
+    sel.value = info.default_provider;
+    showProvider();
   });
+  $('providerSelect').onchange = showProvider;
   $('start').onclick = start;
   $('stop').onclick = stop;
 })();

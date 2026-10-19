@@ -3,7 +3,7 @@
 Streams recorded caller turns (WAV) in real time through the same CallSession used for live calls,
 then checks expectations. Usage:
 
-  python -m gateway.eval_runner ../eval/scenarios/*.json [--provider gemini] [--out ../eval/results]
+  python -m gateway.eval_runner ../eval/scenarios/*.json [--provider gemini|openai] [--out ../eval/results]
 
 Scenario format: see ../eval/README.md.
 """
@@ -50,7 +50,9 @@ class FileTransport:
         self.quiet_after_s = quiet_after_s
         self.turn_timeout_s = turn_timeout_s
         self.session: CallSession | None = None
-        self.last_agent_audio = 0.0
+        # models stream audio faster than real time: track when the caller would actually stop hearing it
+        self.playing_until = 0.0
+        self.heard_any = False
         self._gen = self._frames()
         self.agent_audio_ms = 0.0
 
@@ -75,15 +77,15 @@ class FileTransport:
             await asyncio.sleep(CHUNK_MS / 1000)
 
     def _agent_done(self) -> bool:
-        quiet = time.monotonic() - self.last_agent_audio >= self.quiet_after_s
+        quiet = time.monotonic() >= self.playing_until + self.quiet_after_s
         return bool(self.session and self.session.turn_complete.is_set() and quiet)
 
     async def _wait_agent_quiet(self):
-        deadline = time.monotonic() + 6
-        while time.monotonic() < deadline:
-            if self.last_agent_audio and time.monotonic() - self.last_agent_audio >= self.quiet_after_s:
+        started = time.monotonic()
+        while time.monotonic() - started < 30:
+            if self.heard_any and time.monotonic() >= self.playing_until + self.quiet_after_s:
                 return
-            if not self.last_agent_audio and time.monotonic() > deadline - 4:
+            if not self.heard_any and time.monotonic() - started > 4:
                 return  # agent did not greet
             await asyncio.sleep(0.05)
 
@@ -94,11 +96,14 @@ class FileTransport:
             return None
 
     async def play(self, pcm: bytes, rate: int) -> None:
-        self.last_agent_audio = time.monotonic()
-        self.agent_audio_ms += len(pcm) / 2 / rate * 1000
+        duration = len(pcm) / 2 / rate
+        now = time.monotonic()
+        self.playing_until = max(now, self.playing_until) + duration
+        self.heard_any = True
+        self.agent_audio_ms += duration * 1000
 
     async def clear_playback(self) -> None:
-        pass
+        self.playing_until = time.monotonic()  # barge-in: the caller stops hearing the agent now
 
     async def notify(self, message: dict) -> None:
         pass
@@ -149,13 +154,15 @@ def _norm(v):
 async def run_scenario(path: Path, provider_name: str | None) -> dict:
     scenario = json.loads(path.read_text(encoding="utf-8"))
     settings = get_settings()
-    if provider_name:
-        settings = settings.model_copy(update={"ai_provider": provider_name})
     base = path.parent
     turns = [load_wav_16k_mono((base / t["audio"]).resolve()) for t in scenario["turns"]]
     transport = FileTransport(turns)
     session = CallSession(
-        make_provider(settings), transport, settings, mode="eval", phone_sim=scenario.get("phone_sim")
+        make_provider(settings, provider_name),
+        transport,
+        settings,
+        mode="eval",
+        phone_sim=scenario.get("phone_sim"),
     )
     transport.session = session
     summary = await session.run()
@@ -211,7 +218,7 @@ async def main_async(args) -> int:
 def main() -> None:
     ap = argparse.ArgumentParser(description="VoiceOS voice eval runner")
     ap.add_argument("scenarios", nargs="+")
-    ap.add_argument("--provider", choices=["mock", "gemini"])
+    ap.add_argument("--provider", choices=["mock", "gemini", "openai"])
     ap.add_argument("--out", default=str(Path(__file__).resolve().parents[2] / "eval" / "results"))
     raise SystemExit(asyncio.run(main_async(ap.parse_args())))
 

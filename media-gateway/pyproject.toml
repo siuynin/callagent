@@ -5,6 +5,7 @@ description = "VoiceOS media gateway and voice spike (M0.5)"
 requires-python = ">=3.12"
 dependencies = [
   "google-genai>=2.20,<3",
+  "openai>=2.50,<3",
   "fastapi>=0.120,<1",
   "uvicorn[standard]>=0.38",
   "numpy>=2.1",

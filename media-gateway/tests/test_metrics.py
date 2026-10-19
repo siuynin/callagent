@@ -70,14 +70,14 @@ def test_summary_and_report(settings, tmp_path):
 def test_cost_estimate_when_prices_configured(settings):
     priced = settings.model_copy(
         update={
-            "price_audio_in_per_mtok": 3.0,
-            "price_audio_out_per_mtok": 12.0,
-            "price_text_in_per_mtok": 0.5,
-            "price_text_out_per_mtok": 2.0,
+            "gemini_price_audio_in_per_mtok": 3.0,
+            "gemini_price_audio_out_per_mtok": 12.0,
+            "gemini_price_text_in_per_mtok": 0.5,
+            "gemini_price_text_out_per_mtok": 2.0,
             "usd_to_vnd": 26000.0,
         }
     )
-    rec = CallRecorder(settings=priced, mode="test")
+    rec = CallRecorder(settings=priced, mode="test", provider="gemini", model="gemini-3.8-live")
     rec.on_usage(3000, 2000, 1000, {"prompt": {"AUDIO": 2000}, "response": {"AUDIO": 1000}})
     cost = rec.summary()["cost_estimate"]
     assert cost["usd_total"] == round((2000 * 3 + 1000 * 12) / 1e6, 6)
@@ -92,4 +92,4 @@ def test_empty_env_values_mean_unset(tmp_path):
         "PRICE_AUDIO_IN_PER_MTOK=\nUSD_TO_VND=\nAI_VOICE=\nAI_PROVIDER=mock   # comment\n", encoding="utf-8"
     )
     s = Settings(_env_file=env)
-    assert s.price_audio_in_per_mtok is None and s.usd_to_vnd is None and s.ai_provider == "mock"
+    assert s.gemini_price_audio_in_per_mtok is None and s.usd_to_vnd is None and s.ai_provider == "mock"

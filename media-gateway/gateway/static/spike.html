@@ -16,6 +16,11 @@
     <h1>Gọi thử lễ tân AI</h1>
     <p class="muted">Nói vào micro như một khách gọi đến showroom. Mỗi phiên ghi số đo độ trễ, ngắt lời, công cụ và xác nhận sai vào <code>media-gateway/reports/</code>.</p>
     <div class="row">
+      <label for="providerSelect">Nhà cung cấp</label>
+      <select id="providerSelect" aria-describedby="providerHint"></select>
+      <span id="providerHint" class="muted">Chỉ hiện provider đã có API key trong voiceos/.env</span>
+    </div>
+    <div class="row">
       <label class="check"><input type="checkbox" id="phoneSim"> Mô phỏng đường điện thoại 8 kHz (G.711 A-law)</label>
     </div>
     <div class="row">

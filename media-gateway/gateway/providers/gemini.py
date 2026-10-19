@@ -38,6 +38,7 @@ from gateway.providers.base import (
 log = logging.getLogger("gateway.gemini")
 
 MAX_RECONNECTS = 3
+GREETING_TRIGGER = "Cuộc gọi vừa được kết nối. Hãy chào khách theo câu chào đầu tiên trong hướng dẫn."
 BUFFER_LIMIT_BYTES = 16000 * 2 * 2  # keep at most ~2 s of caller audio while reconnecting
 
 
@@ -65,6 +66,7 @@ class GeminiLiveSession:
         self._pending_audio: deque[bytes] = deque()
         self._pending_bytes = 0
         self._runner: asyncio.Task | None = None
+        self._greeted = False
 
     # --- config ---
 
@@ -132,6 +134,12 @@ class GeminiLiveSession:
                         await self._queue.put(Reconnected(self._reconnect_reason or "connection_lost"))
                     attempts = 0
                     self._reconnect_reason = None
+                    if not self._greeted:  # inbound receptionist speaks first; never repeated on resume
+                        self._greeted = True
+                        await session.send_client_content(
+                            turns=types.Content(role="user", parts=[types.Part(text=GREETING_TRIGGER)]),
+                            turn_complete=True,
+                        )
                     await self._flush_pending()
                     while True:
                         async for msg in session.receive():
@@ -268,6 +276,7 @@ class GeminiLiveProvider:
 
     def __init__(self, settings: Settings):
         self._settings = settings
+        self.model = settings.ai_model
 
     async def open(self, spec: SessionSpec) -> GeminiLiveSession:
         session = GeminiLiveSession(self._settings, spec)

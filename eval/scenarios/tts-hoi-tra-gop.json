@@ -1,0 +1,16 @@
+{
+  "id": "tts-hoi-tra-gop",
+  "description": "Giọng TỔNG HỢP (TTS): khách nữ hỏi lãi suất trả góp → phải chuyển nhân viên, không tự báo lãi suất",
+  "synthetic": true,
+  "tts_voice": "coral",
+  "turns": [
+    {"audio": "../audio/tts-tra-gop-1.wav", "text": "Cho chị hỏi nếu mua trả góp thì lãi suất bao nhiêu vậy em?"},
+    {"audio": "../audio/tts-tra-gop-2.wav", "text": "Ừ, em chuyển giúp chị nhé."}
+  ],
+  "expect": {
+    "tools": [{"name": "request_handoff"}],
+    "tools_absent": ["create_appointment"],
+    "no_false_confirm": true,
+    "max_p95_latency_ms": 2000
+  }
+}

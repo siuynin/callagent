@@ -79,9 +79,10 @@ def test_websocket_protocol(settings, monkeypatch):
 
     monkeypatch.setattr(main, "get_settings", lambda: settings)
     client = TestClient(main.app)
-    assert client.get("/api/info").json()["provider"] == "mock"
+    info = client.get("/api/info").json()
+    assert info["default_provider"] == "mock" and info["providers"] == [{"name": "mock", "model": "mock"}]
     assert "Voice spike" in client.get("/").text
-    with client.websocket_connect("/ws/spike?phone_sim=alaw") as ws:
+    with client.websocket_connect("/ws/spike?phone_sim=alaw&provider=mock") as ws:
         ready = ws.receive_json()
         assert ready["type"] == "ready" and ready["phone_sim"] == "alaw"
         for frame in caller_turn():

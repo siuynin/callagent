@@ -79,24 +79,30 @@ def index():
 @app.get("/api/info")
 def info():
     s = get_settings()
+    available = s.available_providers()
+    default = s.ai_provider if s.ai_provider in available else "mock"
     return {
-        "provider": s.ai_provider,
-        "model": s.ai_model if s.ai_provider == "gemini" else "mock",
-        "key_configured": bool(s.gemini_api_key),
+        "default_provider": default,
+        # only providers with a key on this machine; the key itself never leaves the gateway
+        "providers": [{"name": p, "model": s.model_for(p)} for p in available],
         "business_name": s.business_name,
     }
 
 
 @app.websocket("/ws/spike")
-async def spike(ws: WebSocket, phone_sim: str | None = None):
+async def spike(ws: WebSocket, phone_sim: str | None = None, provider: str | None = None):
     await ws.accept()
     settings = get_settings()
     transport = WebSocketTransport(ws)
     codec = phone_sim if phone_sim in ("alaw", "ulaw") else None
     try:
-        provider = make_provider(settings)
+        live_provider = make_provider(settings, provider)
         session = CallSession(
-            provider, transport, settings, mode="browser_phone_sim" if codec else "browser", phone_sim=codec
+            live_provider,
+            transport,
+            settings,
+            mode="browser_phone_sim" if codec else "browser",
+            phone_sim=codec,
         )
         summary = await session.run()
         log.info("call %s done: %s", summary["call_id"], summary)

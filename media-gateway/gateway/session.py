@@ -80,7 +80,9 @@ class CallSession:
         self.settings = settings
         self.phone_sim = phone_sim
         self.toolbox = toolbox or Toolbox(tz=ZoneInfo(settings.default_timezone))
-        self.recorder = CallRecorder(settings=settings, mode=mode)
+        self.recorder = CallRecorder(
+            settings=settings, mode=mode, provider=provider.name, model=getattr(provider, "model", "mock")
+        )
         self._cancelled_tools: set[str] = set()
         self.turn_complete = asyncio.Event()
 
@@ -92,6 +94,7 @@ class CallSession:
                 "type": "ready",
                 "call_id": self.recorder.call_id,
                 "provider": self.provider.name,
+                "model": self.recorder.model,
                 "phone_sim": self.phone_sim,
             }
         )
@@ -162,7 +165,9 @@ class CallSession:
                         {"type": "turn_complete", "latency_ms": rec.latencies_ms[-1:]}
                     )
                 case Usage():
-                    rec.on_usage(ev.total_tokens, ev.prompt_tokens, ev.response_tokens, ev.by_modality)
+                    rec.on_usage(
+                        ev.total_tokens, ev.prompt_tokens, ev.response_tokens, ev.by_modality, ev.per_response
+                    )
                 case Reconnected(reason=reason):
                     rec.log("reconnected", reason=reason)
                     await self.transport.notify({"type": "reconnected", "reason": reason})
