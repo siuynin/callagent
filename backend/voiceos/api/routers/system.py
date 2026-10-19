@@ -3,7 +3,7 @@ from sqlalchemy import select, text
 
 from voiceos.api.deps import Auth, DbSession
 from voiceos.config import get_settings
-from voiceos.models import Tenant
+from voiceos.models import Tenant, User
 
 router = APIRouter()
 
@@ -28,8 +28,10 @@ def health(db: DbSession):
 @router.get("/me")
 def me(auth: Auth, db: DbSession):
     tenant = db.scalar(select(Tenant).where(Tenant.id == auth.tenant_id))
+    user = db.scalar(select(User).where(User.id == auth.user_id))
     return {
         "user_id": str(auth.user_id),
+        "display_name": user.display_name if user else "",
         "tenant": {"id": str(tenant.id), "name": tenant.name, "timezone": tenant.timezone},
         "role": auth.role,
     }

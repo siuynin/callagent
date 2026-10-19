@@ -2,27 +2,19 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 import { Suspense } from "react";
 
+import { Notice, PageHead, Skeleton } from "@/components/ui/primitives";
 import { api, ApiError, type Contact } from "@/lib/api";
+
+import { ContactsView } from "./ContactsView";
 
 export const metadata: Metadata = { title: "Khách hàng" };
 
-const PHONE_STATUS: Record<Contact["phone_status"], { label: string; cls: string }> = {
-  valid: { label: "Hợp lệ", cls: "badge" },
-  uncertain: { label: "Cần kiểm tra", cls: "badge warn" },
-  invalid: { label: "Sai số", cls: "badge bad" },
-};
-
-function PhoneBadge({ status }: { status: Contact["phone_status"] }) {
-  const s = PHONE_STATUS[status];
-  return <span className={s.cls}>{s.label}</span>;
-}
-
-async function ContactList() {
+async function ContactsData() {
   await connection();
-  let items: Contact[] = [];
+  let contacts: Contact[] = [];
   let failure: string | null = null;
   try {
-    items = (await api.contacts()).items;
+    contacts = (await api.contacts()).items;
   } catch (e) {
     failure =
       e instanceof ApiError && e.status === 401
@@ -31,62 +23,20 @@ async function ContactList() {
   }
   if (failure) {
     return (
-      <div className="banner bad" role="alert">
+      <Notice tone="bad" role="alert">
         {failure}
-      </div>
+      </Notice>
     );
   }
-  if (!items.length) {
-    return <p className="muted">Chưa có khách hàng nào.</p>;
-  }
-  return (
-    <>
-      <div className="card tablewrap responsive">
-        <table>
-          <thead>
-            <tr>
-              <th>Khách hàng</th>
-              <th>Số điện thoại</th>
-              <th>Kiểm tra số</th>
-              <th>Nhu cầu</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((c) => (
-              <tr key={c.id}>
-                <td>{c.name}</td>
-                <td>{c.normalized_phone ?? c.phone_raw}</td>
-                <td>
-                  <PhoneBadge status={c.phone_status} />
-                </td>
-                <td>{c.need ?? "–"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <ul className="cardlist" style={{ listStyle: "none", padding: 0, margin: 0 }}>
-        {items.map((c) => (
-          <li key={c.id} className="card">
-            <b>{c.name}</b> <PhoneBadge status={c.phone_status} />
-            <div className="muted">{c.normalized_phone ?? c.phone_raw}</div>
-            {c.need && <div>{c.need}</div>}
-          </li>
-        ))}
-      </ul>
-    </>
-  );
+  return <ContactsView contacts={contacts} />;
 }
 
 export default function ContactsPage() {
   return (
     <>
-      <header className="pagehead">
-        <h1>Khách hàng</h1>
-        <p className="muted">Số điện thoại được chuẩn hóa về +84; số mất chữ số đầu được đánh dấu cần kiểm tra, không tự đoán.</p>
-      </header>
-      <Suspense fallback={<div className="skeleton" aria-label="Đang tải khách hàng" />}>
-        <ContactList />
+      <PageHead title="Khách hàng" sub="Tập trung thông tin liên hệ, nhu cầu và lịch sử chăm sóc." />
+      <Suspense fallback={<Skeleton label="Đang tải khách hàng" />}>
+        <ContactsData />
       </Suspense>
     </>
   );

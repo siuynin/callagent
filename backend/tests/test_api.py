@@ -28,6 +28,7 @@ def test_auth_required_and_error_envelope(client):
 def test_me(client):
     r = client.get("/api/v1/me", headers=ADMIN_A)
     assert r.json()["tenant"]["timezone"] == "Asia/Ho_Chi_Minh"
+    assert r.json()["display_name"] == "Quản trị A" and r.json()["role"] == "admin"
 
 
 # --- AC01 tenant isolation ---

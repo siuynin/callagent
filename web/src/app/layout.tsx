@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import "./globals.css";
 
-const inter = Inter({ variable: "--font-inter", subsets: ["latin", "vietnamese"] });
+import "@/styles/template.css";
+import "./globals.css";
 
 export const metadata: Metadata = {
   title: { default: "VoiceOS", template: "%s · VoiceOS" },
@@ -11,7 +10,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="vi" className={inter.variable}>
+    <html lang="vi">
       <body>{children}</body>
     </html>
   );

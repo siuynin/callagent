@@ -1,5 +1,6 @@
 import { connection } from "next/server";
 
+import { Notice } from "@/components/ui/primitives";
 import { api, type Health } from "@/lib/api";
 
 // Simulated behaviour must always be labelled (plan/START_HERE_AGENT.md).
@@ -13,9 +14,9 @@ export async function ModeBanner() {
   }
   if (!modes) {
     return (
-      <div className="banner bad" role="alert">
+      <Notice tone="bad" role="alert">
         Không kết nối được API. Kiểm tra backend đang chạy ở API_ORIGIN.
-      </div>
+      </Notice>
     );
   }
   const parts = [
@@ -25,9 +26,5 @@ export async function ModeBanner() {
     !modes.outbound_enabled && "gọi ra đang tắt",
   ].filter(Boolean);
   if (!parts.length) return null;
-  return (
-    <div className="banner warn" role="status">
-      Chế độ thử nghiệm: {parts.join(" · ")}.
-    </div>
-  );
+  return <Notice role="status">Chế độ thử nghiệm · {parts.join(" · ")}.</Notice>;
 }
