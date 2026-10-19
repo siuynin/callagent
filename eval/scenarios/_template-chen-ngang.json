@@ -1,0 +1,9 @@
+{
+  "id": "template-chen-ngang",
+  "description": "MẪU: lượt 2 bắt đầu trong khi AI còn đang nói (ghi lượt 2 ngắn, nói ngay)",
+  "turns": [
+    {"audio": "../audio/chen-ngang-1.wav", "text": "Showroom mở cửa đến mấy giờ vậy em"},
+    {"audio": "../audio/chen-ngang-2.wav", "text": "À thôi, cho anh gặp nhân viên luôn"}
+  ],
+  "expect": {"tools": [{"name": "request_handoff"}], "no_false_confirm": true}
+}

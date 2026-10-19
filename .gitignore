@@ -1,0 +1,32 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+*.egg-info/
+*.db
+*.sqlite3
+
+# node
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# gateway reports may contain transcripts
+media-gateway/reports/
+eval/audio/*.wav
+!eval/audio/.gitkeep
+
+# os/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+eval/results/

@@ -1,0 +1,37 @@
+[project]
+name = "voiceos-media-gateway"
+version = "0.1.0"
+description = "VoiceOS media gateway and voice spike (M0.5)"
+requires-python = ">=3.12"
+dependencies = [
+  "google-genai>=2.20,<3",
+  "fastapi>=0.120,<1",
+  "uvicorn[standard]>=0.38",
+  "numpy>=2.1",
+  "pydantic-settings>=2.10",
+  "tzdata>=2025.2",  # zoneinfo has no system tz database on Windows
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.4", "pytest-asyncio>=1.0", "httpx>=0.28", "ruff>=0.13"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["gateway*"]
+
+[tool.setuptools.package-data]
+gateway = ["static/*", "agents/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

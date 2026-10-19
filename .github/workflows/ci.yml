@@ -1,0 +1,71 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: voiceos
+          POSTGRES_PASSWORD: voiceos
+          POSTGRES_DB: voiceos_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U voiceos" --health-interval 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      APP_ENV: dev
+      DEV_AUTH: "true"
+      DATABASE_URL: postgresql+psycopg://voiceos:voiceos@localhost:5432/voiceos_test
+      TEST_DATABASE_URL: postgresql+psycopg://voiceos:voiceos@localhost:5432/voiceos_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: ruff check . && ruff format --check .
+      - name: migrations apply, match models and roll back on PostgreSQL
+        run: alembic upgrade head && alembic check && alembic downgrade base
+      - run: pytest -q
+
+  media-gateway:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: media-gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: ruff check . && ruff format --check .
+      # mock provider only: CI never calls a live model
+      - run: pytest -q
+        env:
+          AI_PROVIDER: mock
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build

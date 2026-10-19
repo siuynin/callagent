@@ -1,0 +1,94 @@
+/* Tokens follow plan/template (teal accent, compact spacing). */
+:root {
+  --bg: #f5f7f6;
+  --surface: #ffffff;
+  --text: #16201b;
+  --muted: #66716b;
+  --line: #e1e6e3;
+  --accent: #0f766e;
+  --accent-soft: #e6f3f1;
+  --accent-ink: #ffffff;
+  --warn: #a16207;
+  --warn-soft: #fef6e4;
+  --bad: #b91c1c;
+  --bad-soft: #fdecec;
+  --radius: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101412;
+    --surface: #181e1b;
+    --text: #e4eae7;
+    --muted: #9aa49f;
+    --line: #29312d;
+    --accent: #2dd4bf;
+    --accent-soft: #11302b;
+    --accent-ink: #052925;
+    --warn: #facc15;
+    --warn-soft: #2d2610;
+    --bad: #f87171;
+    --bad-soft: #301616;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 15px; margin: 0 0 12px; }
+.muted { color: var(--muted); }
+
+.shell { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+.sidebar { background: var(--surface); border-right: 1px solid var(--line); padding: 16px 12px; }
+.logo { font-weight: 700; font-size: 17px; padding: 4px 8px 16px; display: block; color: var(--text); }
+.navgroup { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 12px 8px 4px; }
+.navlink { display: flex; justify-content: space-between; padding: 7px 8px; border-radius: 8px; color: var(--text); }
+.navlink:hover { background: var(--accent-soft); text-decoration: none; }
+.navlink[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.navlink.soon { color: var(--muted); pointer-events: none; }
+.navlink .tag { font-size: 10px; color: var(--muted); }
+.main { padding: 20px 24px; min-width: 0; }
+.pagehead { margin-bottom: 16px; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.stat dt { font-size: 12px; color: var(--muted); }
+.stat dd { margin: 4px 0 0; font-size: 18px; font-weight: 600; }
+
+.banner { border-radius: var(--radius); padding: 10px 14px; margin-bottom: 16px; font-size: 13px; }
+.banner.warn { background: var(--warn-soft); color: var(--warn); }
+.banner.bad { background: var(--bad-soft); color: var(--bad); }
+
+.tablewrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+.badge { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
+.badge.bad { background: var(--bad-soft); color: var(--bad); }
+.button { display: inline-block; background: var(--accent); color: var(--accent-ink); padding: 8px 14px; border-radius: 8px; font-weight: 600; }
+.button:hover { text-decoration: none; opacity: .92; }
+.skeleton { height: 120px; border-radius: var(--radius); background: linear-gradient(90deg, var(--line), var(--surface), var(--line)); background-size: 200% 100%; animation: sk 1.2s infinite; }
+@keyframes sk { to { background-position: -200% 0; } }
+
+/* staff use phones: cards instead of wide tables (plan/docs/01) */
+.cardlist { display: none; }
+@media (max-width: 760px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar { border-right: 0; border-bottom: 1px solid var(--line); padding: 10px 12px; }
+  .sidebar nav { display: flex; gap: 4px; overflow-x: auto; }
+  .navgroup, .navlink.soon { display: none; }
+  .navlink { white-space: nowrap; }
+  .main { padding: 16px; }
+  .tablewrap.responsive { display: none; }
+  .cardlist { display: grid; gap: 10px; }
+}

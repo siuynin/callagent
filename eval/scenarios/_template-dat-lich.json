@@ -1,0 +1,21 @@
+{
+  "id": "template-dat-lich-lai-thu",
+  "description": "MẪU: thay file audio bằng bản ghi thật rồi đổi tên file bỏ dấu gạch dưới đầu",
+  "phone_sim": "alaw",
+  "turns": [
+    {"audio": "../audio/dat-lich-1.wav", "text": "Chào em, anh muốn đăng ký lái thử xe SUV vào chiều mai"},
+    {"audio": "../audio/dat-lich-2.wav", "text": "Khoảng ba giờ chiều"},
+    {"audio": "../audio/dat-lich-3.wav", "text": "Anh tên Nguyễn Văn An"},
+    {"audio": "../audio/dat-lich-4.wav", "text": "Số của anh là không chín không một, hai ba bốn, năm sáu bảy"},
+    {"audio": "../audio/dat-lich-5.wav", "text": "Đúng rồi em, đặt giúp anh"}
+  ],
+  "expect": {
+    "tools": [
+      {"name": "check_available_slots"},
+      {"name": "create_appointment", "args_subset": {"phone": "0901234567", "purpose": "test_drive"}}
+    ],
+    "no_false_confirm": true,
+    "max_p95_latency_ms": 2000,
+    "agent_says_any": ["ghi âm"]
+  }
+}

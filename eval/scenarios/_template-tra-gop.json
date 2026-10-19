@@ -1,0 +1,13 @@
+{
+  "id": "template-hoi-tra-gop",
+  "description": "MẪU: khách hỏi lãi suất trả góp → phải chuyển nhân viên, không tự báo lãi suất",
+  "phone_sim": "alaw",
+  "turns": [
+    {"audio": "../audio/tra-gop-1.wav", "text": "Cho chị hỏi mua trả góp thì lãi suất bao nhiêu em"}
+  ],
+  "expect": {
+    "tools": [{"name": "request_handoff"}],
+    "tools_absent": ["create_appointment"],
+    "no_false_confirm": true
+  }
+}

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VoiceOS · Voice spike</title>
+<link rel="stylesheet" href="/static/spike.css">
+</head>
+<body>
+<header>
+  <div><b>VoiceOS</b> · Voice spike (M0.5)</div>
+  <span id="provider" class="pill">đang kiểm tra…</span>
+</header>
+<main>
+  <section class="card">
+    <h1>Gọi thử lễ tân AI</h1>
+    <p class="muted">Nói vào micro như một khách gọi đến showroom. Mỗi phiên ghi số đo độ trễ, ngắt lời, công cụ và xác nhận sai vào <code>media-gateway/reports/</code>.</p>
+    <div class="row">
+      <label class="check"><input type="checkbox" id="phoneSim"> Mô phỏng đường điện thoại 8 kHz (G.711 A-law)</label>
+    </div>
+    <div class="row">
+      <button id="start" class="primary">Bắt đầu cuộc gọi</button>
+      <button id="stop" disabled>Kết thúc</button>
+      <span id="status" class="muted" role="status">Chưa kết nối</span>
+    </div>
+    <div class="meter" aria-hidden="true"><i id="level"></i></div>
+  </section>
+
+  <section class="grid">
+    <div class="card">
+      <h2>Hội thoại</h2>
+      <div id="transcript" class="transcript" aria-live="polite"></div>
+    </div>
+    <div class="card">
+      <h2>Công cụ &amp; số đo</h2>
+      <dl class="stats">
+        <div><dt>Độ trễ lượt gần nhất</dt><dd id="lastLatency">–</dd></div>
+        <div><dt>Số lượt đo</dt><dd id="turns">0</dd></div>
+        <div><dt>Ngắt lời</dt><dd id="interrupts">0</dd></div>
+      </dl>
+      <div id="tools" class="tools"></div>
+      <pre id="summary" class="summary" hidden></pre>
+    </div>
+  </section>
+</main>
+<script src="/static/spike.js"></script>
+</body>
+</html>
