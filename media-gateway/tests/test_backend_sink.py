@@ -151,7 +151,12 @@ async def test_handoff_tool_creates_task_or_reports_failure(persisted):
         call_id="c1", name="request_handoff", args={"reason": "Hỏi trả góp", "summary": "lãi suất"}
     )
     ok = await session._execute(call)
-    assert ok["status"] == "ok" and ok["data"] == {"handoff_status": "queued", "task_id": "task-1"}
+    assert ok["status"] == "ok" and ok["data"] == {
+        "handoff_status": "queued",
+        "task_id": "task-1",
+        "after_hours": False,
+        "callback_after": None,
+    }
     session.sink = make_sink(persisted, FakeBackend(down=True))
     session.sink.start()
     failed = await session._execute(call)

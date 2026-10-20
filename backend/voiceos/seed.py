@@ -65,6 +65,18 @@ def seed_agents(session) -> bool:
     return created
 
 
+def seed_calendars(session) -> None:
+    """Working calendar, sample holidays and default inbound route per demo tenant (idempotent)."""
+    from voiceos.scheduling import ensure_defaults
+
+    for tenant_id, owner in ((TENANT_A, USER_ADMIN_A), (TENANT_B, USER_ADMIN_B)):
+        if session.get(Tenant, tenant_id) is None:
+            continue
+        _, route = ensure_defaults(session, tenant_id)
+        route.after_hours_owner_id = route.after_hours_owner_id or owner
+    session.commit()
+
+
 def seed(session) -> None:
     if session.scalar(select(Tenant).where(Tenant.id == TENANT_A)):
         return
@@ -99,6 +111,7 @@ def seed(session) -> None:
         )
     session.commit()
     seed_agents(session)
+    seed_calendars(session)
 
 
 if __name__ == "__main__":
@@ -106,6 +119,7 @@ if __name__ == "__main__":
     with factory() as s:
         seed(s)
         seed_agents(s)
+        seed_calendars(s)
     print("Dev tokens (APP_ENV=dev, DEV_AUTH=true):")
     print(f"  admin A : Bearer dev:{USER_ADMIN_A}")
     print(f"  staff A : Bearer dev:{USER_STAFF_A}")

@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 
 import httpx
 import pytest
@@ -7,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from gateway import agent as agent_mod
 from gateway import evals
-from gateway.agent import AgentRuntime, build_spec, fetch_active_agent, settings_for
+from gateway.agent import AgentRuntime, Routing, build_spec, fetch_active_agent, fetch_routing, settings_for
 from gateway.providers.base import ToolCall
 from gateway.providers.mock import MockLiveProvider
 from gateway.session import CallSession
@@ -161,3 +162,66 @@ async def test_suite_runs_with_draft_config_and_reports(wired, tmp_path, monkeyp
     assert path.endswith("/agent-versions/v9/eval-result")
     assert body["config_hash"] == "h1" and body["passed"] is True and body["summary"]["scenarios"] == 1
     assert headers["x-tenant-id"] == "tenant-a"
+
+
+# --- routing by working hours (AC24) ---
+
+ICT = agent_mod.ZoneInfo("Asia/Ho_Chi_Minh")
+NIGHT = datetime(2026, 10, 19, 21, 0, tzinfo=ICT)  # Monday evening
+NEXT_MORNING = datetime(2026, 10, 20, 8, 30, tzinfo=ICT)
+
+
+def test_in_hours_prompt_has_no_after_hours_block(settings):
+    routing = Routing(after_hours=False, target="agent")
+    spec = build_spec(settings, AgentRuntime(config=CONFIG), now=NIGHT, routing=routing)
+    assert "Ngoài giờ làm việc" not in spec.system_instruction
+
+
+def test_after_hours_prompt_names_next_window(settings):
+    routing = Routing(after_hours=True, target="agent", opens_at=NEXT_MORNING, reason="outside_hours")
+    spec = build_spec(settings, AgentRuntime(config=CONFIG), now=NIGHT, routing=routing)
+    assert "## Ngoài giờ làm việc" in spec.system_instruction
+    assert "8 giờ 30 sáng mai" in spec.system_instruction
+    assert {t.name for t in spec.tools} == {"check_available_slots", "request_handoff"}
+
+
+def test_holiday_reason_and_far_date(settings):
+    opens = datetime(2027, 2, 11, 8, 0, tzinfo=ICT)
+    routing = Routing(after_hours=True, target="agent", opens_at=opens, reason="Tết Nguyên đán")
+    spec = build_spec(
+        settings, AgentRuntime(config=CONFIG), now=datetime(2027, 2, 6, 9, tzinfo=ICT), routing=routing
+    )
+    assert "nghỉ: Tết Nguyên đán" in spec.system_instruction
+    assert "8 giờ Thứ Năm 11/02" in spec.system_instruction
+
+
+def test_announcement_route_has_no_tools(settings):
+    routing = Routing(
+        after_hours=True, target="announcement", announcement="Đã hết giờ.", opens_at=NEXT_MORNING
+    )
+    spec = build_spec(settings, AgentRuntime(config=CONFIG), now=NIGHT, routing=routing)
+    assert spec.tools == []
+    assert "Đã hết giờ." in spec.system_instruction and "lời nhắn tự động" in spec.system_instruction
+    assert "ghi âm" in spec.system_instruction  # disclosure even for a recorded message
+
+
+async def test_fetch_routing_and_fallback(wired, monkeypatch):
+    def ok(request):
+        assert request.url.path.endswith("/internal/routing")
+        return httpx.Response(
+            200,
+            json={
+                "after_hours": True,
+                "target": "agent",
+                "announcement": "x",
+                "opens_at": NEXT_MORNING.isoformat(),
+                "reason": "outside_hours",
+            },
+        )
+
+    monkeypatch.setattr(agent_mod.httpx, "AsyncClient", _mock_client(ok))
+    got = await fetch_routing(wired)
+    assert got.after_hours and got.opens_at == NEXT_MORNING
+    monkeypatch.setattr(agent_mod.httpx, "AsyncClient", _mock_client(lambda r: httpx.Response(500)))
+    assert await fetch_routing(wired) is None  # unknown -> answered as in hours, never stranded
+    assert await fetch_routing(wired.model_copy(update={"gateway_tenant_id": ""})) is None

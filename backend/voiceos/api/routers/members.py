@@ -13,7 +13,7 @@ from sqlalchemy import func, select, update
 
 from voiceos.api.deps import AuthContext, DbSession, require_writer
 from voiceos.api.errors import ApiError, trace_id_var
-from voiceos.models import Membership, Task, User
+from voiceos.models import InboundRoute, Membership, Task, User
 from voiceos.models.tasks import TERMINAL
 from voiceos.services import enqueue, record_audit
 
@@ -159,6 +159,12 @@ def remove(user_id: uuid.UUID, auth: Admin, db: DbSession):
         .where(Task.tenant_id == auth.tenant_id, Task.owner_id == user_id, Task.status.not_in(TERMINAL))
         .values(owner_id=None, status="new", version=Task.version + 1)
     ).rowcount
+    # after-hours requests must not keep landing on someone who left (AC24)
+    db.execute(
+        update(InboundRoute)
+        .where(InboundRoute.tenant_id == auth.tenant_id, InboundRoute.after_hours_owner_id == user_id)
+        .values(after_hours_owner_id=None, version=InboundRoute.version + 1)
+    )
     record_audit(
         db,
         tenant_id=auth.tenant_id,

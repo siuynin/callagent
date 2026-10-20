@@ -96,6 +96,36 @@ export type Task = {
 
 export type TaskSummary = { unassigned: number; overdue: number; in_progress: number; resolved: number };
 export type Member = { user_id: string; name: string; role: Me["role"] };
+export type Window = [string, string];
+export type CalendarException = {
+  id: string;
+  date_from: string;
+  date_to: string;
+  kind: "holiday" | "closed" | "special_hours";
+  hours: Window[];
+  label: string;
+};
+export type BusinessCalendar = {
+  id: string;
+  name: string;
+  timezone: string;
+  weekly_hours: Record<string, Window[]>;
+  version: number;
+  exceptions: CalendarException[];
+  status: { open: boolean; closes_at: string | null; opens_at: string | null; reason: string };
+};
+export type RouteTarget = "agent" | "announcement";
+export type InboundRoute = {
+  id: string;
+  number: string;
+  calendar_id: string;
+  in_hours_target: RouteTarget;
+  after_hours_target: RouteTarget;
+  ai_failure_target: "announcement";
+  after_hours_owner: { user_id: string; name: string } | null;
+  announcement: string;
+  version: number;
+};
 export type AdminMember = Member & {
   email: string;
   status: "active" | "invited";
@@ -231,6 +261,31 @@ export const api = {
       headers: { "if-match": String(version) },
     }),
   members: () => request<{ items: Member[] }>("/members"),
+  calendars: () => request<{ items: BusinessCalendar[] }>("/business-calendars"),
+  updateCalendar: (id: string, version: number, body: Pick<BusinessCalendar, "name" | "timezone" | "weekly_hours">) =>
+    request<{ data: BusinessCalendar }>(`/business-calendars/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body,
+      headers: { "if-match": String(version) },
+    }),
+  addCalendarException: (id: string, body: Omit<CalendarException, "id">) =>
+    request<{ data: CalendarException }>(`/business-calendars/${encodeURIComponent(id)}/exceptions`, { method: "POST", body }),
+  deleteCalendarException: (id: string, exceptionId: string) =>
+    request<{ deleted: boolean }>(
+      `/business-calendars/${encodeURIComponent(id)}/exceptions/${encodeURIComponent(exceptionId)}`,
+      { method: "DELETE" },
+    ),
+  inboundRoutes: () => request<{ items: InboundRoute[] }>("/inbound-routes"),
+  updateRoute: (
+    id: string,
+    version: number,
+    body: { in_hours_target: RouteTarget; after_hours_target: RouteTarget; after_hours_owner_id: string | null; announcement: string },
+  ) =>
+    request<{ data: InboundRoute }>(`/inbound-routes/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body,
+      headers: { "if-match": String(version) },
+    }),
   adminMembers: () => request<{ items: AdminMember[] }>("/admin/members"),
   inviteMember: (body: { email: string; display_name: string; role: Me["role"] }) =>
     request<{ data: AdminMember }>("/admin/members", { method: "POST", body }),

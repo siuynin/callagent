@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { ROLE_LABEL } from "@/lib/labels";
 import { oidcEnabled } from "@/lib/session";
 
+import { SettingsTabs } from "./SettingsTabs";
 import { TeamView } from "./TeamView";
 
 export const metadata: Metadata = { title: "Cài đặt" };
@@ -49,17 +50,7 @@ export default function SettingsPage() {
   return (
     <>
       <PageHead title="Cài đặt workspace" sub="Quản lý đội ngũ, quyền truy cập và chính sách dữ liệu." />
-      <div className="tabs">
-        <button type="button" className="active">
-          Đội ngũ
-        </button>
-        <button type="button" disabled title="Có ở các bước sau">
-          Dữ liệu & bảo mật
-        </button>
-        <button type="button" disabled title="Có ở các bước sau">
-          Nhật ký
-        </button>
-      </div>
+      <SettingsTabs active="/cai-dat" />
       <Suspense fallback={<Skeleton label="Đang tải thành viên" />}>
         <Team />
       </Suspense>

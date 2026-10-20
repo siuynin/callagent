@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from gateway import evals
-from gateway.agent import fetch_active_agent, settings_for
+from gateway.agent import fetch_active_agent, fetch_routing, settings_for
 from gateway.config import ROOT, get_settings
 from gateway.providers import make_provider
 from gateway.session import CallSession
@@ -101,6 +101,8 @@ async def spike(ws: WebSocket, phone_sim: str | None = None, provider: str | Non
     try:
         # live calls run the published active agent version (never a draft); bundled prompt if unreachable
         agent = await fetch_active_agent(settings)
+        # in/out of hours from the tenant calendar (AC24); unknown -> answer as in hours
+        routing = await fetch_routing(settings)
         provider = provider or (agent.config.get("provider") if agent else None)
         live_provider = make_provider(
             settings_for(settings, agent, provider or settings.ai_provider), provider
@@ -113,6 +115,7 @@ async def spike(ws: WebSocket, phone_sim: str | None = None, provider: str | Non
             phone_sim=codec,
             persist=True,  # spike calls appear in the web app when ADR 0006 config is set
             agent=agent,
+            routing=routing,
         )
         summary = await session.run()
         log.info("call %s done: %s", summary["call_id"], summary)

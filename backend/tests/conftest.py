@@ -11,7 +11,16 @@ from fastapi.testclient import TestClient  # noqa: E402
 from voiceos import db as dbmod  # noqa: E402
 from voiceos.config import get_settings  # noqa: E402
 from voiceos.db import Base  # noqa: E402
-from voiceos.seed import TENANT_A, TENANT_B, USER_ADMIN_A, USER_ADMIN_B, USER_STAFF_A, seed, seed_agents  # noqa: E402
+from voiceos.seed import (  # noqa: E402
+    TENANT_A,
+    TENANT_B,
+    USER_ADMIN_A,
+    USER_ADMIN_B,
+    USER_STAFF_A,
+    seed,
+    seed_agents,
+    seed_calendars,
+)
 
 TEST_DB = os.environ.get("TEST_DATABASE_URL", "sqlite+pysqlite:///./test-voiceos.db")
 IS_POSTGRES = TEST_DB.startswith("postgresql")
@@ -26,6 +35,19 @@ def pytest_collection_modifyitems(items):
             item.add_marker(skip)
 
 
+def always_open(s) -> None:
+    """Tests are independent of the wall clock: open 24/7, no holidays. Calendar tests set their own."""
+    from sqlalchemy import delete, update
+
+    from voiceos.models import BusinessCalendar, CalendarException
+
+    s.execute(delete(CalendarException))
+    s.execute(
+        update(BusinessCalendar).values(weekly_hours={str(d): [["00:00", "24:00"]] for d in range(1, 8)})
+    )
+    s.commit()
+
+
 @pytest.fixture()
 def session_factory():
     get_settings.cache_clear()
@@ -38,6 +60,8 @@ def session_factory():
     with factory() as s:
         seed(s)
         seed_agents(s)
+        seed_calendars(s)
+        always_open(s)
     yield factory
     Base.metadata.drop_all(engine)
     engine.dispose()

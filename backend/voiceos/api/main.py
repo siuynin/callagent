@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from voiceos.api import errors
-from voiceos.api.routers import agents, calls, contacts, internal, members, system, tasks
+from voiceos.api.routers import agents, calendars, calls, contacts, internal, members, system, tasks
 from voiceos.config import get_settings
 
 
@@ -28,6 +28,7 @@ def create_app() -> FastAPI:
         tasks.router,
         agents.router,
         members.router,
+        calendars.router,
         internal.router,
     ):
         app.include_router(router, prefix="/api/v1")

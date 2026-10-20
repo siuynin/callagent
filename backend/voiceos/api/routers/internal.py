@@ -23,6 +23,7 @@ from voiceos.config import get_settings
 from voiceos.db import utcnow
 from voiceos.domain.phone import normalize_vn_phone
 from voiceos.models import Agent, AgentVersion, Call, CallTurn, Contact, Task, Tenant, ToolRun
+from voiceos.scheduling import after_hours_assignment, decide
 from voiceos.services import enqueue, record_audit
 
 router = APIRouter(prefix="/internal", tags=["internal"], include_in_schema=False)
@@ -138,6 +139,27 @@ def eval_result(version_id: uuid.UUID, body: EvalResultIn, svc: Service, db: DbS
 # --- calls ---
 
 
+# --- routing ---
+
+
+@router.get("/routing")
+def routing(svc: Service, db: DbSession, number: str | None = None):
+    """What answers a call arriving now: the agent or the announcement, in or out of hours (AC24)."""
+    d = decide(db, svc.tenant_id, utcnow(), number)
+    db.commit()  # first use creates the default calendar and route
+    return {
+        "route_id": str(d.route_id),
+        "after_hours": d.after_hours,
+        "target": d.target,
+        "announcement": d.announcement,
+        "opens_at": d.opens_at.isoformat() if d.opens_at else None,
+        "closes_at": d.closes_at.isoformat() if d.closes_at else None,
+        "reason": d.reason,
+        "timezone": d.timezone,
+        "trace_id": trace_id_var.get(),
+    }
+
+
 class CallIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     provider: str = Field(min_length=1, max_length=32)
@@ -145,7 +167,7 @@ class CallIn(BaseModel):
     direction: Literal["inbound", "outbound"] = "inbound"
     started_at: datetime
     caller_number: str | None = Field(default=None, max_length=32)
-    after_hours: bool = False
+    called_number: str | None = Field(default=None, max_length=32)
     agent_version_id: uuid.UUID | None = None
 
 
@@ -183,7 +205,8 @@ def create_call(body: CallIn, svc: Service, db: DbSession):
         answered_at=body.started_at,
         technical_status="in_progress",
         contact_id=contact_id,
-        after_hours=body.after_hours,
+        # decided here from the tenant calendar, never trusted from the caller (reports, AC24)
+        after_hours=decide(db, svc.tenant_id, _aware(body.started_at), body.called_number).after_hours,
         agent_version_id=_own_version(db, svc, body.agent_version_id),
     )
     db.add(call)
@@ -312,19 +335,31 @@ class HandoffIn(BaseModel):
 def request_handoff(call_id: uuid.UUID, body: HandoffIn, svc: Service, db: DbSession):
     """Caller asked for a human. Creates at most one inbox task per call; it is a request, not a transfer."""
     call = _call(db, svc, call_id)
+    owner, due = None, utcnow() + HANDOFF_DUE
+    if call.after_hours:
+        # nobody is at work: an owner by default and due in the next working window (AC24)
+        owner, due = after_hours_assignment(db, svc.tenant_id, utcnow())
     task, created = _system_task(
         db,
         svc,
         call,
         key=f"handoff:{call.id}",
-        type="human_request",
+        type="callback" if call.after_hours else "human_request",
         title=body.reason[:200],
         description=body.summary or None,
         priority="high",
-        due_at=utcnow() + HANDOFF_DUE,
+        due_at=due,
+        owner_id=owner,
     )
     db.commit()
-    return {"task_id": str(task.id), "created": created, "status": "queued", "trace_id": trace_id_var.get()}
+    return {
+        "task_id": str(task.id),
+        "created": created,
+        "status": "queued",
+        "after_hours": call.after_hours,
+        "callback_after": task.due_at.isoformat() if call.after_hours and task.due_at else None,
+        "trace_id": trace_id_var.get(),
+    }
 
 
 class EndIn(BaseModel):
@@ -345,14 +380,18 @@ def end_call(call_id: uuid.UUID, body: EndIn, svc: Service, db: DbSession):
     call.business_outcome = body.business_outcome or call.business_outcome
     call.version += 1
     if call.business_outcome == "booked":
+        owner, due = None, utcnow() + timedelta(hours=2)
+        if call.after_hours:
+            owner, due = after_hours_assignment(db, svc.tenant_id, utcnow())
         _system_task(
             db,
             svc,
             call,
             key=f"appointment:{call.id}",
             type="appointment_confirm",
-            title="Xác nhận lịch hẹn AI vừa đặt",
-            due_at=utcnow() + timedelta(hours=2),
+            title="Xác nhận lịch hẹn AI vừa đặt" + (" (ngoài giờ)" if call.after_hours else ""),
+            due_at=due,
+            owner_id=owner,
         )
     enqueue(db, tenant_id=svc.tenant_id, topic="call.ended", payload={"call_id": str(call.id)})
     db.commit()

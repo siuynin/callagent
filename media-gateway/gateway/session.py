@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
-from gateway.agent import AgentRuntime, build_spec, file_agent
+from gateway.agent import AgentRuntime, Routing, build_spec, file_agent
 from gateway.audio import phone_channel_sim
 from gateway.backend import BackendSink
 from gateway.config import Settings
@@ -120,6 +120,7 @@ class CallSession:
         persist: bool = False,
         caller_number: str | None = None,
         agent: AgentRuntime | None = None,
+        routing: Routing | None = None,
     ):
         self.provider = provider
         self.transport = transport
@@ -127,6 +128,7 @@ class CallSession:
         self.phone_sim = phone_sim
         self.toolbox = toolbox or Toolbox(tz=ZoneInfo(settings.default_timezone))
         self.agent = agent or file_agent(settings)
+        self.routing = routing
         self.recorder = CallRecorder(
             settings=settings, mode=mode, provider=provider.name, model=getattr(provider, "model", "mock")
         )
@@ -147,7 +149,7 @@ class CallSession:
     async def run(self) -> dict:
         if self.persist:
             self.sink.start(datetime.now(UTC), self.caller_number, self.agent.version_id)
-        live = await self.provider.open(build_spec(self.settings, self.agent))
+        live = await self.provider.open(build_spec(self.settings, self.agent, routing=self.routing))
         self.recorder.log(
             "session_open",
             provider=self.provider.name,
@@ -164,6 +166,8 @@ class CallSession:
                 "persist": self.persist,
                 "agent_version": self.agent.number,
                 "agent_source": self.agent.source,
+                "after_hours": bool(self.routing and self.routing.after_hours),
+                "route_target": self.routing.target if self.routing else "agent",
             }
         )
         pump_in = asyncio.create_task(self._pump_in(live))
@@ -185,6 +189,11 @@ class CallSession:
             persistence = await self.sink.close(outcome=outcome)
         summary = self.recorder.summary()
         summary["persistence"] = persistence
+        summary["routing"] = {
+            "known": self.routing is not None,
+            "after_hours": bool(self.routing and self.routing.after_hours),
+            "target": self.routing.target if self.routing else "agent",
+        }
         summary["agent"] = {
             "source": self.agent.source,
             "version": self.agent.number,
@@ -281,7 +290,13 @@ class CallSession:
             return {
                 "status": "ok",
                 "source_provider": "voiceos",
-                "data": {"handoff_status": "queued", "task_id": created["task_id"]},
+                "data": {
+                    "handoff_status": "queued",
+                    "task_id": created["task_id"],
+                    # after hours: a callback in the next working window, not a live transfer (AC24)
+                    "after_hours": bool(created.get("after_hours")),
+                    "callback_after": created.get("callback_after"),
+                },
             }
         try:
             return await asyncio.wait_for(

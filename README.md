@@ -1,13 +1,14 @@
 # VoiceOS
 
-Nền tảng tổng đài AI tiếng Việt. Đặc tả nguồn: [`../plan`](../plan/README.md) (v1.1). Quyết định kiến trúc: [`docs/adr`](docs/adr) (Gemini Live: ADR 0003, OpenAI Realtime: ADR 0005, gateway ghi vào backend: ADR 0006, phiên bản agent và cổng eval: ADR 0007, đăng nhập OIDC: ADR 0008).
+Nền tảng tổng đài AI tiếng Việt. Đặc tả nguồn: [`../plan`](../plan/README.md) (v1.1). Quyết định kiến trúc: [`docs/adr`](docs/adr) (Gemini Live: ADR 0003, OpenAI Realtime: ADR 0005, gateway ghi vào backend: ADR 0006, phiên bản agent và cổng eval: ADR 0007, đăng nhập OIDC: ADR 0008, lịch làm việc và định tuyến theo giờ: ADR 0009).
 
-## Trạng thái (19/10/2026)
+## Trạng thái (20/10/2026)
 
 | Phần | Trạng thái |
 |---|---|
-| M0 nền tảng | Đang làm. Đã có repo, ADR 0001–0004, models + migration đầu, tenant scoping, RBAC, idempotency, If-Match, outbox worker, CI |
-| M0.5 voice spike | Code xong, **chưa đo với model thật**. Gateway, adapter Gemini Live và OpenAI Realtime (so sánh A/B), mock, trang gọi thử, mô phỏng đường điện thoại 8 kHz, bộ đo, eval runner |
+| M0 nền tảng | Xong: repo, ADR, migrations, tenant scoping, RBAC, idempotency, If-Match, outbox worker, CI, lịch làm việc + ngày lễ (ADR 0009) |
+| M1 inbound | Đang làm: định tuyến trong/ngoài giờ, việc ngoài giờ có người nhận và hạn trong giờ làm việc kế tiếp (AC24), agent versions, call/turn/tool records, handoff, hộp việc. Còn: callback đầy đủ, thông báo nhân viên, RAG, đặt lịch thật |
+| M0.5 voice spike | Code xong, đã chạy OpenAI Realtime thật trên 2 kịch bản eval. **Gate G-V chưa đạt**: cần ≥50 kịch bản, SIP trunk test, chốt ADR 0004. Gateway, adapter Gemini Live và OpenAI Realtime (so sánh A/B), mock, trang gọi thử, mô phỏng đường điện thoại 8 kHz, bộ đo, eval runner |
 | Web | Khung Next.js: Tổng quan, Khách hàng (đọc API thật), trang voice spike |
 | Voice Agents | Bản nháp, eval với model thật, xuất bản khi đạt, rollback; mỗi cuộc gọi ghi phiên bản agent (ADR 0007) |
 | Xác thực | OIDC (code + PKCE) qua web BFF, mời/đổi vai trò/gỡ thành viên ở màn Cài đặt (ADR 0008). Không cấu hình OIDC thì dùng token dev (`APP_ENV=dev`) |
@@ -113,4 +114,4 @@ CI chạy backend trên Postgres, gateway với mock provider (không bao giờ 
 
 - Phân quyền theo chi nhánh, RLS Postgres, refresh token, nhiều issuer OIDC theo tenant.
 - Telephony thật (ADR 0004 chờ SIP trunk test và kết quả spike).
-- Inbox, handoff, lịch hẹn thật, thông báo nhân viên — M1.
+- M1 còn lại: callback đầy đủ (AC07), thông báo nhân viên web/email, RAG tài liệu đã duyệt, lịch hẹn thật, lịch theo chi nhánh.
